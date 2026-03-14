@@ -1,0 +1,700 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+use Auth;
+use DB;
+use Storage;
+use Yajra\DataTables\DataTables;
+use DateTime;
+class leaveController extends Controller
+{
+    public function leave_management(){
+
+        $leave_types = DB::connection("intra_payroll")->table("tbl_leave_types")
+            ->orderBy("leave_name")
+            ->get();
+        // dd(Auth::user()->access);
+        if(Auth::user()->access["leave_management"]["user_type"] != "employee"){
+            $emp_list = DB::connection("intra_payroll")->table("tbl_employee")
+            ->where('is_active', 1)
+            ->orderBy("last_name")
+            ->orderBy("first_name")
+            ->orderBy("middle_name")
+            ->get();
+
+        
+        }else{
+            $emp_list = DB::connection("intra_payroll")->table("tbl_employee")
+            ->where('is_active', 1)
+            ->where("id",Auth::user()->company["linked_employee"]["id"])
+            ->orderBy("last_name")
+            ->orderBy("first_name")
+            ->orderBy("middle_name")
+            ->get();
+         
+            }
+    
+
+
+      
+
+        return view("leave.index")
+            ->with("leave_type", $leave_types)
+            ->with("emp_list", $emp_list)
+            ;
+    }
+
+    public function store_leave_type(Request $request){
+        
+        if($request->id == "new"){
+            $tbl = DB::connection("intra_payroll")->table("tbl_leave_types")
+            ->where("leave_name", "like", $request->leave_name)
+            ->first();
+
+            if($tbl != null) {
+                return json_encode("Leave Name Already Taken");
+            }else{
+               $insert_array = array(
+                "leave_type" => $request->leave_type,
+                "leave_name" => $request->leave_name,
+                "is_with_credits" => $request->require,
+                "date_created" => date("Y-m-d H:i:s"),
+                "user_id" => Auth::user()->id
+                );
+            }
+
+        }else{
+            $tbl = DB::connection("intra_payroll")->table("tbl_leave_types")
+            ->where("leave_name", "like", $request->leave_name)
+            ->where("id", "!=", $request->id)
+            ->first();
+
+            if($tbl != null) {
+                return json_encode("Leave Name Already Taken");
+            }else{
+               $insert_array = array(
+                "leave_type" => $request->leave_type,
+                "leave_name" => $request->leave_name,
+                "is_with_credits" => $request->require,
+                "user_id" => Auth::user()->id
+                );
+            }
+
+        }
+        DB::beginTransaction();
+
+        try {
+            if($request->id == "new"){
+                DB::connection("intra_payroll")->table("tbl_leave_types")
+                ->insert($insert_array);
+            }else{
+                DB::connection("intra_payroll")->table("tbl_leave_types")
+                ->where("id", $request->id)
+                ->update($insert_array);
+            }
+
+         
+
+            DB::commit();
+            return json_encode("Success");
+        } catch (\Throwable $th) {
+            DB::rollback();
+            return json_encode($th->getMessage());
+        }
+
+    }
+
+    public function leave_type_tbl(Request $request){
+        $page_permission = Auth::user()->access[$request->page]["access"];
+        $types =array(
+            "VL" => "Vacation Leave",
+            "SL" => "Sick Leave",
+            "OL" => "Special Leave"
+        );
+        $data = DB::connection("intra_payroll")->table("tbl_leave_types")
+            ->orderBy("date_updated")
+            ->get();
+
+        $data = collect($data);
+
+        return Datatables::of($data)
+        ->addColumn('leave_type', function($row) use ($types){
+            return $types[$row->leave_type];
+        })
+       
+        ->addColumn('is_with_credits', function($row){
+            if($row->is_with_credits ==1){
+                return "<a class='btn btn-success btn-sm'>YES</a>";
+            }else{
+                return "<a class='btn btn-warning btn-sm'>NO</a>";
+            }
+
+
+        })
+        ->addColumn('action', function($row) use ($page_permission){
+            $btn = "";
+            if(preg_match("/U/i", $page_permission)){
+                // add delete in leave
+                $type = "type";
+                $btn .= "<a 
+                class='btn btn-sm btn-success'
+                data-id='".$row->id."' 
+                data-type='".$row->leave_type."' 
+                data-name='".$row->leave_name."' 
+                data-require='".$row->is_with_credits."' 
+                data-toggle='modal' 
+                data-target='#leave_table_modal'
+                >
+                Edit
+                </a>";
+                // add delete in leave
+                $btn .= " <button 
+                class='btn btn-sm btn-danger'
+                onclick='delete_leave(" . $row->id . ", \"" . $type . "\")'
+                >
+                Delete
+                </button>";
+            }
+          
+
+            return $btn;
+        })
+        ->rawColumns(['action', 'is_with_credits'])
+        ->make(true);
+
+    }
+
+
+    function search_multi_array($array, $key, $value) {
+        foreach ($array as $subarray) {
+            if (isset($subarray[$key]) && $subarray[$key] == $value) {
+                return $subarray;
+            }
+        }
+        return null;
+    }
+
+    public function leave_credit_tbl(Request $request){
+        $page_permission = Auth::user()->access[$request->page]["access"];
+        $employee = json_decode(json_encode(
+            DB::connection("intra_payroll")->table("tbl_employee")
+                ->get()
+        ), true);
+
+        $leave_type = json_decode(json_encode(
+            DB::connection("intra_payroll")->table("tbl_leave_types")
+                ->get()
+        ), true);
+
+
+        $types =array(
+            "VL" => "Vacation Leave",
+            "SL" => "Sick Leave",
+            "OL" => "Special Leave"
+        );
+
+
+
+
+        if(Auth::user()->access[$request->page]["user_type"] != "employee"){
+            $data = DB::connection("intra_payroll")->table("tbl_leave_credits")
+            ->orderBy("date_updated")
+            ->get();
+
+        }else{
+            $data = DB::connection("intra_payroll")->table("tbl_leave_credits")
+            ->where("emp_id", Auth::user()->company["linked_employee"]["id"])
+            ->orderBy("date_updated")
+            ->get();
+            }
+    
+
+
+
+        
+
+        $data = collect($data);
+
+        return Datatables::of($data)
+        ->addColumn('emp_name', function($row) use ($employee){
+            $data = $this->search_multi_array($employee, "id", $row->emp_id);
+            if(count($data)>0){
+                return "(".$data["emp_code"] . ") ".$data["last_name"].", ".$data["first_name"]." ".$data["middle_name"]." ".$data["ext_name"];
+            }else{
+                return "";
+            }
+
+            
+        })
+       
+        ->addColumn('leave_type', function($row) use ($types,$leave_type){
+            $data = $this->search_multi_array($leave_type, "id", $row->leave_id);
+            if(count($data)>0){
+            return $types[$data["leave_type"]];
+            }else{
+                return "";
+            }
+        })
+
+        ->addColumn('leave_name', function($row) use ($types,$leave_type){
+            $data = $this->search_multi_array($leave_type, "id", $row->leave_id);
+            if(count($data)>0){
+            return $data["leave_name"];
+            }else{
+                return "";
+            }
+        })
+       
+        ->addColumn('credit', function($row){
+          return $row->leave_count;
+        })
+        ->addColumn('action', function($row) use ($page_permission, $request){
+            $btn = "";
+            if(preg_match("/U/i", $page_permission)){
+                if(Auth::user()->access[$request->page]["user_type"] != "employee"){
+                    // add delete in leave
+                    $type = "credit";
+                    $btn .= "<a 
+                    class='btn btn-sm btn-success'
+                    data-id='".$row->id."'
+                    data-emp_id='".$row->emp_id."'
+                    data-leave_id='".$row->leave_id."'
+                    data-leave_count='".$row->leave_count."'
+                    data-toggle='modal' 
+                    data-target='#leave_credit_modal'
+                    >
+                    Edit
+                    </a>";
+                    // add delete in leave
+                    $btn .= " <button 
+                    class='btn btn-sm btn-danger'
+                    onclick='delete_leave(" . $row->id . ", \"" . $type . "\")'
+                    >
+                    Delete
+                    </button>";
+                }
+               
+            }
+          
+
+            return $btn;
+        })
+        ->rawColumns(['action'])
+        ->make(true);
+
+    }
+
+    public function file_leave_tbl(Request $request){
+        $page_permission = Auth::user()->access[$request->page]["access"];
+        $employee = json_decode(json_encode(
+            DB::connection("intra_payroll")->table("tbl_employee")
+                ->get()
+        ), true);
+
+        $leave_type = json_decode(json_encode(
+            DB::connection("intra_payroll")->table("tbl_leave_types")
+                ->get()
+        ), true);
+
+
+        
+
+        if(Auth::user()->access[$request->page]["user_type"] != "employee"){
+            $data = DB::connection("intra_payroll")->table("tbl_leave_used")
+            ->orderBy("date_updated")
+            ->get();
+
+        }else{
+        
+            $data = DB::connection("intra_payroll")->table("tbl_leave_used")
+            ->where("emp_id", Auth::user()->company["linked_employee"]["id"])
+            ->orderBy("date_updated")
+            ->get();
+            }
+    
+
+
+        $data = collect($data);
+
+        return Datatables::of($data)
+        ->addColumn('emp_name', function($row) use ($employee){
+            $data = $this->search_multi_array($employee, "id", $row->emp_id);
+            if(count($data)>0){
+                return $data["last_name"].", ".$data["first_name"]." ".$data["middle_name"]." ".$data["ext_name"];
+            }else{
+                return "";
+            }
+        })
+       
+        ->addColumn('leave_type', function($row) use ($leave_type){
+            $data = $this->search_multi_array($leave_type, "id", $row->leave_source_id);
+            if(count($data)>0){
+            return $data["leave_name"];
+            }else{
+                return "";
+            }
+        })
+        ->addColumn('dates', function($row){
+            $btn = "<label class='badge badge-info mb-1 mr-1'>FROM</label>".$row->leave_date_from;
+            $btn .= "<br>" . "<label class='badge badge-info mr-1'>TO</label>".$row->leave_date_to;
+
+            return $btn;
+          })
+
+        ->addColumn('leave_count', function($row){
+          return $row->leave_count;
+        })
+        ->addColumn('action', function($row) use ($page_permission, $request){
+            $btn = "";
+            if(preg_match("/U/i", $page_permission)){
+                if(Auth::user()->access[$request->page]["user_type"] != "employee"){
+                    $btn .= "<a 
+                    class='btn btn-sm btn-success mr-1'
+                    data-id = '".$row->id."'
+                    data-emp_id = '".$row->emp_id."'
+                    data-leave_id = '".$row->leave_source_id."'
+                    data-leave_from = '".$row->leave_date_from."'                        
+                    data-leave_to = '".$row->leave_date_to."'                        
+                    data-reason ='".$row->reason."'
+                    data-leave_status = '".$row->leave_status."'
+                    data-toggle='modal' 
+                    data-target='#leave_file_modal'
+                    >
+                    Edit
+                    </a>";
+                }
+                
+                $btn .= "<button 
+                class='btn btn-sm btn-danger'
+                onclick='delete_file_leave(".$row->id.")'
+                >
+                Delete
+                </button>";
+
+
+                
+            }
+          
+            $today = strtotime(date("Y-m-d"));
+            $date_from = strtotime($row->leave_date_from);
+            // show action btn
+            // if($today > $date_from){
+            //     $btn ="";
+            // }
+
+            return $btn;
+        })
+        ->rawColumns(['action', 'dates'])
+        ->make(true);
+
+    }
+
+    public function delete_filed_leave(Request $request){
+        DB::beginTransaction();
+            try {
+                DB::connection("intra_payroll")->table("tbl_leave_used")
+                    ->where("id", $request->id)
+                    ->delete();
+                DB::commit();
+                return json_encode("Deleted");
+            } catch (\Throwable $th) {
+                DB::rollback();
+                return json_encode($th->getMessage());
+            }
+
+    }
+
+    // add delete in leave
+    public function delete_leave(Request $request){
+        $type = $request->type;
+        $tbl = "";
+        if($type == "credit"){
+            $tbl = "tbl_leave_credits";
+        }else{
+            $tbl = "tbl_leave_types";
+        }
+        DB::beginTransaction();
+            try {
+                DB::connection("intra_payroll")->table($tbl)
+                    ->where("id", $request->id)
+                    ->delete();
+                DB::commit();
+                return json_encode("Deleted");
+            } catch (\Throwable $th) {
+                DB::rollback();
+                return json_encode($th->getMessage());
+            }
+
+    }
+
+    public function store_leave_credit(Request $request){
+        DB::beginTransaction();
+        if(isset($request->emp_id)){
+            try {
+                $all_emp = 0;
+                foreach($request->emp_id as $emp){
+                    if($emp == "all"){
+                        $all_emp = 1;
+                    }
+                }
+
+
+
+                if($all_emp == 1){
+                    if(Auth::user()->access["leave_management"]["user_type"] != "employee"){
+                        $emp_list = DB::connection("intra_payroll")->table("tbl_employee")
+                        ->select("id")
+                        ->where('is_active', 1)
+                        ->orderBy("last_name")
+                        ->orderBy("first_name")
+                        ->orderBy("middle_name")
+                        ->get();
+            
+                    
+                    }else{
+                        $emp_list = DB::connection("intra_payroll")->table("tbl_employee")
+                        ->select("id")
+                        ->where('is_active', 1)
+                        ->where("id",Auth::user()->company["linked_employee"]["id"])
+                        ->orderBy("last_name")
+                        ->orderBy("first_name")
+                        ->orderBy("middle_name")
+                        ->get();
+                     
+                        }
+    
+                    
+                        $request->emp_id = json_decode(json_encode($emp_list), true);
+                }
+
+              
+
+
+                foreach($request->emp_id as $emp){
+                    if($all_emp == 1){
+                        $emp_id =  $emp["id"];
+                    }else{
+                        $emp_id = $emp;
+                    }
+                  
+
+                    $tbl = DB::connection("intra_payroll")->table("tbl_leave_credits")
+                        ->where("emp_id", "like", $emp_id)
+                        ->where("leave_id", $request->leave_type)
+                        ->first();
+                    if($tbl != null){
+                        $new_leave_credit = $tbl->leave_count + $request->leave_credit; //update leave credit
+                        $insert_array = array(
+                            "emp_id" => $emp_id,
+                            "leave_id" => $request->leave_type,
+                            "leave_count" => $new_leave_credit, //update leave credit
+                            "user_id" => Auth::user()->id,
+                            "year_given" => date("Y-m-d")  // fix leave credit
+                            );
+                            DB::connection("intra_payroll")->table("tbl_leave_credits")
+                            ->where("id", $tbl->id)
+                            ->update($insert_array);
+                    }else{
+                        $insert_array = array(
+                            "emp_id" => $emp_id,
+                            "leave_id" => $request->leave_type,
+                            "leave_count" => $request->leave_credit,
+                            "date_created" => date("Y-m-d H:i:s"),
+                            "user_id" => Auth::user()->id,
+                            "year_given" => date("Y-m-d")  // fix leave credit
+                            );
+                    
+                            DB::connection("intra_payroll")->table("tbl_leave_credits")
+                            ->insert($insert_array);
+                    }
+                }
+                DB::commit();
+                return json_encode("Success");
+            } catch (\Throwable $th) {
+                DB::rollback();
+                return json_encode($th->getMessage());
+            }
+        }else{
+            return json_encode("No Employee Selected");
+        }
+    }
+
+
+    public function leave_employee_list(Request $request){
+        if(Auth::user()->access[$request->page]["user_type"] != "employee"){
+          $employee_list = DB::connection("intra_payroll")->table("tbl_employee")
+            ->where("is_active", 1)
+            ->get();
+
+
+            return json_encode($employee_list);
+
+        }else{
+            //EMPLOYEE
+            $employee_list = DB::connection("intra_payroll")->table("tbl_employee")
+                ->where("is_active", 1)
+                ->where("user_id", Auth::user()->id)
+                ->get();
+
+                return json_encode($employee_list); 
+
+        }
+    }
+
+    public function get_leave_balance(Request $request){
+        $target_year = date("Y");
+        $chk_leave_type = DB::connection("intra_payroll")->table("tbl_leave_types")
+        ->where("id", $request->file_leave_type)
+        ->where("is_with_credits", "1")
+        ->first();
+        if($chk_leave_type != null){
+            $is_with_credits = 1;
+            $leave_credits = DB::connection("intra_payroll")->table("tbl_leave_credits")
+            ->where("leave_id", $request->file_leave_type)
+            ->where("year_given", $target_year)
+            ->where("emp_id", $request->file_emp_name)
+            ->sum("leave_count");
+
+            $leave_used = DB::connection("intra_payroll")->table("tbl_leave_used")
+            ->where("leave_year", $target_year)
+            ->where("leave_source_id", $request->file_leave_type)
+            ->where("emp_id", $request->file_emp_name)
+            ->sum("leave_count");
+
+             $leave_balance = $leave_credits - $leave_used;
+
+        }else{
+           $leave_balance = "not required";
+        }
+
+        return json_encode($leave_balance);
+
+
+    }
+
+    public function store_filed_leave(Request $request){
+        $is_with_credits = 0;
+        $target_year  = date("Y", strtotime($request->file_from));
+
+        $file_from = new DateTime($request->file_from);
+        $file_to = new DateTime($request->file_to);
+        $interval = $file_from->diff($file_to);
+        $days = $interval->format('%d') + 1;
+  
+        if($request->id == "new"){
+            $chk_if_already_filed = DB::connection("intra_payroll")->table("tbl_leave_used")
+            ->where("leave_source_id", $request->file_leave_type)
+            ->where("emp_id", $request->file_emp_name)
+            ->whereBetween("leave_date_from",[$request->file_from, $request->file_to])
+            ->orWhere("leave_source_id", $request->file_leave_type)
+            ->where("emp_id", $request->file_emp_name)
+            ->whereBetween("leave_date_from",[$request->file_from, $request->file_to])
+            ->get();
+            if(count($chk_if_already_filed)>0){
+                return json_encode("Filling Date conflict");
+            }
+            $chk_leave_type = DB::connection("intra_payroll")->table("tbl_leave_types")
+            ->where("id", $request->file_leave_type)
+            ->where("is_with_credits", "1")
+            ->first();
+            if($chk_leave_type != null){
+                $is_with_credits = 1;
+            }
+
+        if($is_with_credits == 1){
+            
+            $leave_used = DB::connection("intra_payroll")->table("tbl_leave_used")
+                ->where("leave_year", $target_year)
+                ->where("leave_source_id", $request->file_leave_type)
+                ->where("emp_id", $request->file_emp_name)
+                ->sum("leave_count");
+
+            $leave_credits = DB::connection("intra_payroll")->table("tbl_leave_credits")
+                ->where("leave_id", $request->file_leave_type)
+                ->where("year_given", $target_year)
+                ->where("emp_id", $request->file_emp_name)
+                ->sum("leave_count");
+
+            $leave_balance = $leave_credits - $leave_used;
+
+            if($leave_balance >= $days){
+                $ins_data = array(
+                    "emp_id" => $request->file_emp_name,
+                    "leave_source_id" => $request->file_leave_type,
+                    "leave_year" => $target_year,
+                    "leave_date_from" => $request->file_from,
+                    "leave_date_to" => $request->file_to,
+                    "leave_status" => $request->leave_status,
+                    "reason" => $request->file_reason,
+                    "leave_count" => $days,
+                    "date_created" => date("Y-m-d H:i:s"),
+                    "user_id" => Auth::user()->id
+                );
+            }else{
+                return json_encode("Leave Credits is not enough");
+            }
+        }else{
+            $ins_data = array(
+                "emp_id" => $request->file_emp_name,
+                "leave_source_id" => $request->file_leave_type,
+                "leave_year" => $target_year,
+                "leave_date_from" => $request->file_from,
+                "leave_date_to" => $request->file_to,
+                "leave_status" => $request->leave_status,
+                "leave_count" => $days,
+                "reason" => $request->file_reason,
+                "date_created" => date("Y-m-d H:i:s"),
+                "user_id" => Auth::user()->id
+            );
+        }
+
+
+
+        }else{
+            $ins_data = array(
+                "emp_id" => $request->file_emp_name,
+                "leave_source_id" => $request->file_leave_type,
+                "leave_year" => $target_year,
+                "leave_date_from" => $request->file_from,
+                "leave_date_to" => $request->file_to,
+                "leave_status" => $request->leave_status,
+                "reason" => $request->file_reason,
+                "leave_count" => $days,
+                "user_id" => Auth::user()->id
+            );
+        }
+       
+
+
+        
+
+            DB::beginTransaction();
+            try {
+                
+                if($request->id == "new"){
+                    DB::connection("intra_payroll")->table("tbl_leave_used")
+                    ->insert($ins_data);
+                }else{
+                    DB::connection("intra_payroll")->table("tbl_leave_used")
+                    ->where('id', $request->id)
+                    ->update($ins_data);
+                }
+                
+
+
+
+                    DB::commit();
+                return json_encode("Filling Success");
+            } catch (\Throwable $th) {
+                DB::rollback();
+                return json_encode($th->getMessage());
+
+            }
+       
+
+    }
+
+
+}

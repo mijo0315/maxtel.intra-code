@@ -1,0 +1,2080 @@
+@extends('layouts.front-app')
+
+@section('title')
+
+{{Auth::user()->access[Route::current()->action["as"]]["user_type"]}} - Setting
+
+@stop
+
+@section("styles")
+
+<style>
+
+	th{
+
+		text-align: center;
+
+	}
+
+    .profile_card{
+
+        margin:1px;
+
+    }
+
+    .titles_card{
+
+        margin: 1px;
+
+    }
+
+</style>
+
+@stop
+
+@section("content")
+
+@if(preg_match("/R/i", Auth::user()->access[Route::current()->action["as"]]["access"])=="0")
+
+                            
+
+	{{Auth::user()->access[Route::current()->action["as"]]["access"]}}
+
+	<div class="page-wrapper">
+
+		<div class="content container-fluid">
+
+			<div class="row">
+
+				<div class="col-xl-12 col-sm-12 col-12 mb-4">
+
+					<div class="row">
+
+						<div class="col-xl-10 col-sm-8 col-12 ">
+
+							<label >YOU HAVE NO PRIVILEDGE ON THIS PAGE </label>
+
+						</div>
+
+					</div>
+
+				</div>
+
+			</div>
+
+		</div>
+
+	</div>
+
+@else
+
+<div class="page-wrapper" id="division_page">
+
+    <div class="content container-fluid">
+
+        <div class="row" >
+
+      
+
+            <div class="col-xl-12 col-sm-12 col-12 mb-2">
+
+                <div class="head-link-set">
+
+                    <ul>
+
+                        <li><a class="menu_tab active" id="emp_tab"  onclick="">Employee</a></li>
+
+                        <li><a class="menu_tab"  onclick="" id="profilling_menu">Profilling</a></li>
+
+                        <li><a class="menu_tab"  onclick="" id="titles_menu">Titles</a></li>
+
+                        
+
+                    </ul>
+
+                </div>
+
+            </div>
+
+            @include("employee.employee")
+
+            @include("employee.profilling")
+
+            @include("employee.titles")
+
+            
+
+        </div>
+
+       
+
+    </div>
+
+</div>
+
+    @include("employee.employee_modal")
+
+@endif
+
+@stop
+
+@section("scripts")
+
+<script>
+
+        $("#profilling_menu").on("click",function(){
+
+            show_tab("profilling");
+
+        });
+
+        $("#titles_menu").on("click",function(){
+
+            show_tab("titles");
+
+        });
+
+        $("#emp_tab").on("click",function(){
+
+            show_tab("employee_list");
+
+        });
+
+        $(".menu_tab").on("click",function(){
+
+            $(".menu_tab").attr("class", "menu_tab");
+
+            $(this).attr("class", "menu_tab active");
+
+        });
+
+        function show_tab(id){
+
+            $(".front_tab").hide("fast");
+
+            $("#"+id).show("fast");
+
+        }
+
+        function show_profile_body(profile){
+
+            var stat= $("#"+profile+"-ico").attr("class");
+
+            if( stat == "fas fa-caret-square-down fa-lg profile-ico") {
+
+                $("."+profile+" .card-body").show("fast");
+
+                $("#"+profile+"-ico").attr("class", "fas fa-caret-square-up fa-lg profile-ico")
+
+            }else{
+
+                $("."+profile+" .card-body").hide("fast");
+
+                $("#"+profile+"-ico").attr("class", "fas fa-caret-square-down fa-lg profile-ico")
+
+            }
+
+        }
+
+        function show_titles_body(titles){
+
+            var stat= $("#"+titles+"-ico").attr("class");
+
+            if( stat == "fas fa-caret-square-down fa-lg titles-ico") {
+
+                $("."+titles+" .card-body").show("fast");
+
+                $("#"+titles+"-ico").attr("class", "fas fa-caret-square-up fa-lg titles-ico")
+
+            }else{
+
+                $("."+titles+" .card-body").hide("fast");
+
+                $("#"+titles+"-ico").attr("class", "fas fa-caret-square-down fa-lg titles-ico")
+
+            }
+
+        }
+
+    	$( document ).ready(function() {
+
+			
+
+                $(".profile_card .card-body").hide("fast");
+
+                $(".titles_card .card-body").hide("fast");
+
+                
+
+                $(".form-select").select2();
+
+				employee_list();
+
+                division_list();
+
+                department_list();
+
+                branch_list();
+
+                position_list();
+
+                designation_list();
+
+                $("#division_page").show("fast");
+
+                $("#add_emp_page").hide("fast");
+
+                
+
+                show_tab("employee_list");
+
+                $(".agency_div").hide("fast");
+
+			});
+
+          
+
+            $("#save_btn").on("click", function(){
+
+                var emp_code = $("#emp_code").val();
+
+                var bio_id = $("#bio_id").val();
+
+                
+
+                var last_name = $("#last_name").val();
+
+                var first_name = $("#first_name").val();
+
+                var middle_name = $("#middle_name").val();
+
+                var ext_name = $("#ext_name").val();
+
+                var contact_no = $("#contact_no").val();
+
+                var sss_no = $("#sss_no").val();
+
+                var philhealth_no = $("#philhealth_no").val();
+
+                var hdmf_no = $("#hdmf_no").val();
+
+                var tin_no = $("#tin_no").val();
+
+                
+
+                var position = $("#position").val();
+
+                var position_name = $( "#position option:selected" ).text();
+
+                var department = $("#department").val();
+
+                var branch = $("#branch").val();
+
+                var designation = $("#designation").val();
+
+                var hiring_type = $("#hiring_type").val();
+
+                var agency_name = $("#agency_name").val();
+
+                var salary_type = $("#salary_type").val();
+
+                var salary_rate = $("#salary_rate").val();
+
+                var is_mwe = $("#is_mwe").val();
+
+                var fix_divisor = $("#fix_divisor").val();
+
+                var fix_hdmf = $("#fix_hdmf").val();
+
+                var fix_sss = $("#fix_sss").val();
+
+                var fix_philhealth = $("#fix_philhealth").val();
+
+                var fix_rate = $("#fix_rate").val();
+
+                var is_active = $("#is_active").val();
+
+                var save_btn = $("#save_btn").val();
+
+                var has_account = $("#have_account").val();
+
+                var user_name = $("#user_name").val();
+
+                var password = $("#password").val();
+
+                var role = $("#role").val();
+
+               var address = $("#address").val();
+
+                var formData = new FormData();
+
+                    formData.append('emp_img', $('input[type=file]')[0].files[0]);
+
+                    formData.append('emp_code', emp_code);
+
+                    formData.append('bio_id', bio_id);
+
+                    
+
+                    formData.append('last_name', last_name);
+
+                    formData.append('first_name', first_name);
+
+                    formData.append('middle_name', middle_name);
+
+                    formData.append('ext_name', ext_name);
+
+                    formData.append('contact_no', contact_no);
+
+                    formData.append('sss_no', sss_no);
+
+                    formData.append('philhealth_no', philhealth_no);
+
+                    formData.append('hdmf_no', hdmf_no);
+
+                    formData.append('tin_no', tin_no);
+
+                    
+
+                    formData.append('position', position);
+
+                    formData.append('position_name', position_name);
+
+                    formData.append('department', department);
+
+                    formData.append('branch', branch);
+
+                    formData.append('designation', designation);
+
+                    formData.append('hiring_type', hiring_type);
+
+                    formData.append('agency_name', agency_name);
+
+                    formData.append('salary_type', salary_type);
+
+                    formData.append('salary_rate', salary_rate);
+
+                    formData.append('is_mwe', is_mwe);
+
+                    
+
+                    formData.append('fix_divisor', fix_divisor);
+
+                    formData.append('fix_hdmf', fix_hdmf);
+
+                    formData.append('fix_sss', fix_sss);
+
+                    formData.append('fix_philhealth', fix_philhealth);
+
+                    formData.append('fix_rate', fix_rate);
+
+                    formData.append('is_active', is_active);
+
+                    formData.append('save_btn', save_btn);
+
+                    formData.append('has_account', has_account);
+
+                    formData.append('user_name', user_name);
+
+                    formData.append('password', password);
+
+                    formData.append('role', role);
+
+                    formData.append('address', address);
+
+                    formData.append('_token','{{csrf_token()}}');
+
+                         $.confirm({
+
+							title: 'Save',
+
+							content: 'Store data?',
+
+							escapeKey: 'cancelAction',
+
+							buttons: {
+
+								confirm: {
+
+									btnClass: 'btn-green',
+
+									text: 'Confirm',
+
+									action: function(){
+
+                                        if(save_btn != "new"){
+
+                                                $.ajax({
+
+                                                    url: "{{route('create_user_account')}}",
+
+                                                    data: {
+
+                                                        _token : "{{csrf_token()}}", 
+
+                                                        id: save_btn,
+
+                                                        user_name: user_name,
+
+                                                        password: password,
+
+                                                        name: first_name+" "+last_name,
+
+                                                        first_name: first_name,
+
+                                                        middle_name: middle_name,
+
+                                                        last_name: last_name,
+
+                                                        ext_name: ext_name,
+
+                                                        position: position_name,
+
+                                                        role_id: role,
+
+                                                    },
+
+                                                        success: function (data) { 
+
+                                                            if(data == "duplicate"){
+
+                                                                $("#have_account").val("false");
+
+                                                                $.notify("User name already exist", {type:"info",icon:"info"}); 
+
+                                                            }else if(data == "saved"){
+
+                                                                $("#have_account").val("true");
+
+                                                            }else{
+
+                                                                $("#have_account").val("false");
+
+                                                            }
+
+                                                            //update user
+
+                                                            $.ajax({
+
+                                                                url: "{{route('update_employee')}}",
+
+                                                                data: formData,
+
+                                                                contentType: false,
+
+                                                                processData: false,
+
+                                                                    success: function (data) { 
+
+                                                                            if(data == "duplicate"){
+
+                                                                                $.notify("Employee Code Already Exist", {type:"info",icon:"info"}); 
+
+                                                                                return;
+
+                                                                            }else if(data == "true"){
+
+                                                                                $.notify("Success", {type:"success",icon:"check"}); 
+
+                                                                                $("#division_page").show("fast");
+
+                                                                                show_tab("employee_list");
+
+                                                                                
+
+                                                                                $("#add_emp_page").hide("fast");
+
+                                                                                employee_list();
+
+                                                                            }else{
+
+                                                                                $.notify("Failed", {type:"danger",icon:"close"}); 
+
+                                                                            }
+
+                                                                    },
+
+                                                                    dataType: 'json',
+
+                                                                    method: 'POST'
+
+                                                                });
+
+                                                        },
+
+                                                        dataType: 'json',
+
+                                                        method: 'POST'
+
+                                                    });
+
+                                          
+
+                                        }else{
+
+                                            //NEW
+
+                                          
+
+                                            if(emp_code == "" || first_name == "" || last_name == "" || user_name == "" || password == "" || role == ""){
+
+                                                $.notify("Please Complete all Information", {type:"danger",icon:"close"}); 
+
+                                                return ;
+
+                                            }
+
+                                            $.ajax({
+
+                                                                url: "{{route('create_employee')}}",
+
+                                                                data: formData,
+
+                                                                contentType: false,
+
+                                                                processData: false,
+
+                                                                    success: function (data) { 
+
+                                                                        if(data == "duplicate"){
+
+                                                                                $.notify("Employee Code Already Exist", {type:"info",icon:"info"}); 
+
+                                                                                return;
+
+                                                                            }else if(data == "true"){
+
+                                                                                $.notify("Success", {type:"success",icon:"check"}); 
+
+                                                                                $("#division_page").show("fast");
+
+                                                                                show_tab("employee_list");
+
+                                                                                $("#add_emp_page").hide("fast");
+
+                                                                                employee_list();
+
+                                                                            }else{
+
+                                                                                $.notify("Failed", {type:"danger",icon:"close"}); 
+
+                                                                            }
+
+                                                                    },
+
+                                                                    dataType: 'json',
+
+                                                                    method: 'POST'
+
+                                                                });
+
+                                        } 
+
+									}
+
+								},
+
+								cancelAction: {
+
+									btnClass: 'btn-gray',
+
+									text: 'Cancel',
+
+									action: function(){
+
+                                        // $("#division_page").show("fast");
+
+                                        // $("#add_emp_page").hide("fast");
+
+									}  
+
+								}
+
+							}
+
+						});
+
+            });
+
+            function emp_view(emp_id){
+
+                HoldOn.open(holdon_option);
+
+                
+
+                    $.ajax({
+
+                        url: "{{route('view_employee')}}",
+
+                    data: {
+
+                        _token : "{{csrf_token()}}", 
+
+                        id: emp_id
+
+                    
+
+                    },
+
+                        success: function (data) { 
+
+                            if(data){
+
+                                var profile_picture = data.profile_picture;
+
+                                if(profile_picture){
+
+                                    profile_picture = profile_picture;
+
+                                }else{
+
+                                    profile_picture = 'public/assets/img/user.jpg';
+
+                                }
+
+                                var profile_pic_source = "{{ rtrim(asset_with_env(''), '/') }}" + '/' + profile_picture.replace('public/', '');
+
+                                $("#profile_pic").attr("src",profile_pic_source);
+
+                                $("#emp_code").val(data.emp_code);
+
+                                $("#bio_id").val(data.bio_id);
+
+                                $("#last_name").val(data.last_name);
+
+                                $("#first_name").val(data.first_name);
+
+                                $("#middle_name").val(data.middle_name);
+
+                                $("#ext_name").val(data.ext_name);
+
+                                $("#sss_no").val(data.sss_number);
+
+                                $("#philhealth_no").val(data.philhealth_number);
+
+                                $("#hdmf_no").val(data.hdmf_number);
+
+                                $("#tin_no").val(data.tin_number);
+
+                                
+
+                                $("#contact_no").val(data.contact_no);
+
+                                $("#position").val(data.position_id).change();
+
+                                $("#department").val(data.department).change();
+
+                                $("#branch").val(data.branch_id).change();
+
+                                $("#designation").val(data.designation).change();
+
+                                $("#hiring_type").val(data.is_direct).change();
+
+                                $("#agency_name").val(data.agency_name);
+
+                                $("#salary_type").val(data.salary_type).change();
+
+                                $("#salary_rate").val(data.salary_rate);
+
+                                $("#is_mwe").val(data.is_mwe).change();
+
+                                $("#fix_divisor").val(data.fix_divisor);
+
+                                $("#fix_hdmf").val(data.fix_hdmf);
+
+                                $("#fix_sss").val(data.fix_sss);
+
+                                $("#fix_philhealth").val(data.fix_philhealth);
+
+                                $("#fix_rate").val(data.fix_tax_rate);
+
+                                $("#is_active").val(data.is_active).change();
+
+                                $("#address").val(data.address);
+
+                                
+
+                                
+
+                                if(data.user_id != 0){
+
+                                    $.ajax({
+
+                                        url: "{{route('view_user_data')}}",
+
+                                                data: {
+
+                                                    _token : "{{csrf_token()}}", 
+
+                                                    id: data.user_id
+
+                                                
+
+                                                },
+
+                                                    success: function (data) { 
+
+                                                        if(data){
+
+                                                            $("#role").val(data.role_id).change();
+
+                                                            $("#user_name").val(data.email);
+
+                                                            $("#password").val("");
+
+                                                            $("#have_account").val("true");
+
+                                                        }else{
+
+                                                            $("#have_account").val("false");
+
+                                                        }
+
+                                                        
+
+                                                    },
+
+                                                    dataType: 'json',
+
+                                                    method: 'POST'
+
+                                                });
+
+                                    }else{
+
+                                        $("#have_account").val("false");
+
+                                    }
+
+                                $("#save_btn").val(data.id);
+
+                            }else{
+
+                                $("#have_account").val("false");
+
+                                // remove pic
+
+                                $("#profile_pic").attr("src","{{ asset_with_env('upload_images/emp_pic/avatar-user.jpg')}}");
+
+                                $("#user_name").val("");
+
+                                $("#password").val("");
+
+                                //end here
+
+                                $("#emp_code").val("");
+
+                                $("#last_name").val("");
+
+                                $("#first_name").val("");
+
+                                $("#middle_name").val("");
+
+                                $("#ext_name").val("");
+
+                                $("#address").val("");
+
+                                $("#sss_no").val("");
+
+                                $("#philhealth_no").val("");
+
+                                $("#hdmf_no").val("");
+
+                                $("#tin_no").val("");
+
+                                
+
+                                $("#contact_no").val("");
+
+                                $("#position").val(0).change();
+
+                                $("#department").val(0).change();
+
+                                $("#branch").val(0).change();
+
+                                $("#designation").val(0).change();
+
+                                $("#hiring_type").val(1).change();
+
+                                $("#agency_name").val("");
+
+                                $("#salary_type").val("DAILY").change();
+
+                                $("#salary_rate").val("");
+
+                                $("#is_mwe").val(1).change();
+
+                                $("#fix_divisor").val("");
+
+                                $("#fix_hdmf").val("");
+
+                                $("#fix_sss").val("");
+
+                                $("#fix_philhealth").val("");
+
+                                $("#fix_rate").val("");
+
+                                $("#is_active").val(1).change();
+
+                                $("#save_btn").val("new");
+
+                            }
+
+                            
+
+                            $("#division_page").hide("fast");
+
+                            $("#add_emp_page").show("fast");
+
+                            HoldOn.close();
+
+                        },
+
+                        dataType: 'json',
+
+                        method: 'POST'
+
+                    });
+
+               
+
+            }
+
+             // add delete
+
+             function record_delete(id,record_type){
+
+                $.confirm({
+
+                    title: 'Delete Record',
+
+                    content: 'Are you sure?',
+
+                    escapeKey: 'cancelAction',
+
+                    buttons: {
+
+                        confirm: {
+
+                            btnClass: 'btn-danger',
+
+                            text: "Yes",
+
+                            action: function(){
+
+                                HoldOn.open(holdon_option);
+
+                                $.ajax({
+
+                                        url: "{{route('delete_record')}}",
+
+                                    data: {
+
+                                        _token : "{{csrf_token()}}", 
+
+                                        id: id,
+
+                                        record_type: record_type
+
+                                    },
+
+                                        success: function (data) { 
+
+                                            
+
+                                            $.notify(data, {type:"info",icon:"info"}); 
+
+                                            if(record_type == "employee"){
+
+                                                employee_list();
+
+                                            }
+
+                                            if(record_type == "division"){ //add delete in division
+                                                division_list();
+                                            }
+
+                                            if(record_type == "department"){
+
+                                                department_list();
+
+                                            }
+
+                                            if(record_type == "branch"){
+
+                                                branch_list();
+
+                                            }
+
+                                            if(record_type == "position"){
+
+                                                position_list();
+
+                                            }
+
+                                            if(record_type == "designation"){
+
+                                                designation_list();
+
+                                            }
+
+                                            HoldOn.close();
+
+                                            
+
+                                        },
+
+                                        dataType: 'json',
+
+                                        method: 'POST'
+
+                                    });
+
+                            }
+
+                            
+
+                        },
+
+                        cancelAction: {
+
+                            btnClass: 'btn-gray',
+
+                            text: 'Cancel',
+
+                            action: function(){
+
+                            
+
+                            }  
+
+                        }
+
+                    }
+
+                });
+
+            }
+
+            function emp_view_close(){
+
+                $.confirm({
+
+							title: 'Close',
+
+							content: 'Back to List without saving',
+
+							escapeKey: 'cancelAction',
+
+							buttons: {
+
+								confirm: {
+
+									btnClass: 'btn-green',
+
+									text: 'Yes',
+
+									action: function(){
+
+                                        $("#division_page").show("fast");
+
+                                        show_tab("employee_list");
+
+                                        $("#add_emp_page").hide("fast");
+
+									}
+
+									
+
+								},
+
+								cancelAction: {
+
+									btnClass: 'btn-gray',
+
+									text: 'No',
+
+									action: function(){
+
+									
+
+									}  
+
+								}
+
+							}
+
+						});
+
+                
+
+            }
+
+            $("#hiring_type").on("change", function(){
+
+                if($(this).val() == 0){
+
+                    $(".agency_div").show("fast");
+
+                }else{
+
+                    $(".agency_div").hide("fast");
+
+                }
+
+            });
+
+            //TABLE LOADER
+
+			function employee_list(){
+
+				$('#tbl_employee_list').DataTable({
+
+                "bDestroy": true,
+
+                "autoWidth": false,
+
+                "searchHighlight": true,
+
+                "searching": true,
+
+                "processing": true,
+
+                "serverSide": true,
+
+                "orderMulti": true,
+
+                "order": [],
+
+                "pageLength": 10,
+
+                "ajax": {
+
+                    "url": "{{ route('employee_list') }}",
+
+                    "dataType": "json",
+
+                    "type": "POST",
+
+                    "data":{
+
+                        "_token": "{{ csrf_token() }}", 
+
+						"page": "{{Route::current()->action['as']}}"  
+
+                        
+
+                    }
+
+                },
+
+                "columns":[
+
+					{'data': 'name'},
+
+                    {'data': 'position'},
+
+					{'data': 'department'},
+
+					{'data': 'branch'},
+
+					{'data': 'designation'},
+
+					{'data': 'action', 'orderable': false, 'searchable': false},
+
+                ]
+
+            });
+
+			}
+
+            function division_list(){
+
+				$('#division_tbl').DataTable({
+
+                "bDestroy": true,
+
+                "autoWidth": false,
+
+                "searchHighlight": true,
+
+                "searching": true,
+
+                "processing": true,
+
+                "serverSide": true,
+
+                "orderMulti": true,
+
+                "order": [],
+
+                "pageLength": 10,
+
+                "ajax": {
+
+                    "url": "{{ route('division_list') }}",
+
+                    "dataType": "json",
+
+                    "type": "POST",
+
+                    "data":{
+
+                        "_token": "{{ csrf_token() }}", 
+
+						"page": "{{Route::current()->action['as']}}"  
+
+                        
+
+                    }
+
+                },
+
+                "columns":[
+
+					{'data': 'code'},
+
+                    {'data': 'division'},
+
+                    {'data': 'date_updated'},
+
+					{'data': 'is_active'},
+
+					{'data': 'action', 'orderable': false, 'searchable': false},
+
+                ]
+
+            });
+
+			}
+
+            $('#division_modal').on('show.bs.modal', function(e) {
+
+                var id = $(e.relatedTarget).data('id');
+
+                var code = $(e.relatedTarget).data('code');
+
+                var division = $(e.relatedTarget).data('division');
+
+                var schedule_id = $(e.relatedTarget).data('schedule_id');
+
+                var is_active = $(e.relatedTarget).data('is_active');
+
+                $("#save_division").val(id);
+
+                $("#div_code").val(code);
+
+                $("#div_name").val(division);
+
+                $("#div_sched").val(schedule_id).change();
+
+                $("#div_is_active").val(is_active).change();
+
+            });
+
+            $("#save_division").on("click", function(){
+
+               var save_division =  $("#save_division").val();
+
+               var div_code =  $("#div_code").val();
+
+               var div_name =  $("#div_name").val();
+
+               var div_sched =  $("#div_sched").val();
+
+               var is_active =  $("#div_is_active").val();
+
+                if(div_code == ""){ $.notify("Code is Required", {type:"danger",icon:"close"}); return; }
+
+                if(div_name == ""){ $.notify("Name is Required", {type:"danger",icon:"close"}); return; }
+
+                $.confirm({
+
+							title: 'Save',
+
+							content: 'Save Division Data',
+
+							escapeKey: 'cancelAction',
+
+							buttons: {
+
+								confirm: {
+
+									btnClass: 'btn-green',
+
+									text: 'Yes',
+
+									action: function(){
+
+                                        $.ajax({
+
+                                            url: "{{route('save_division')}}",
+
+                                            data: {
+
+                                                save_division : save_division,
+
+                                                div_code : div_code,
+
+                                                div_name : div_name,
+
+                                                div_sched : div_sched,
+
+                                                is_active : is_active,
+
+                                                _token : "{{csrf_token()}}", 
+
+                                            },
+
+                                                success: function (data) { 
+
+                                                    if(data == "duplicate"){
+
+                                                            $.notify("Code Already Exist", {type:"info",icon:"info"}); return;
+
+                                                    }else if(data == "true"){
+
+                                                        $.notify("Success", {type:"success",icon:"check"}); division_list(); 
+
+                                                        $('#division_modal').modal('hide');
+
+                                                        return;
+
+                                                    }else{
+
+                                                        $.notify("Failed", {type:"danger",icon:"close"}); return; 
+
+                                                    }
+
+                                                    
+
+                                                },
+
+                                                dataType: 'json',
+
+                                                method: 'POST'
+
+                                            });
+
+									}
+
+									
+
+								},
+
+								cancelAction: {
+
+									btnClass: 'btn-gray',
+
+									text: 'No',
+
+									action: function(){
+
+									
+
+									}  
+
+								}
+
+							}
+
+						});
+
+                
+
+            });
+
+            function department_list(){
+
+				$('#department_tbl').DataTable({
+
+                "bDestroy": true,
+
+                "autoWidth": false,
+
+                "searchHighlight": true,
+
+                "searching": true,
+
+                "processing": true,
+
+                "serverSide": true,
+
+                "orderMulti": true,
+
+                "order": [],
+
+                "pageLength": 10,
+
+                "ajax": {
+
+                    "url": "{{ route('department_list') }}",
+
+                    "dataType": "json",
+
+                    "type": "POST",
+
+                    "data":{
+
+                        "_token": "{{ csrf_token() }}", 
+
+						"page": "{{Route::current()->action['as']}}"  
+
+                        
+
+                    }
+
+                },
+
+                "columns":[
+
+					{'data': 'code'},
+
+                    {'data': 'dept_div'},
+
+                    {'data': 'department'},
+
+                    {'data': 'date_updated'},
+
+					{'data': 'is_active'},
+
+					{'data': 'action', 'orderable': false, 'searchable': false},
+
+                ]
+
+            });
+
+			}
+
+            $('#department_modal').on('show.bs.modal', function(e) {
+
+                var id = $(e.relatedTarget).data('id');
+
+                var code = $(e.relatedTarget).data('code');
+
+                var dept_div = $(e.relatedTarget).data('dept_div');
+
+                var department = $(e.relatedTarget).data('department');
+
+                
+
+                var schedule_id = $(e.relatedTarget).data('schedule_id');
+
+                var is_active = $(e.relatedTarget).data('is_active');
+
+                $("#save_department").val(id);
+
+                $("#dept_code").val(code);
+
+                $("#dept_div").val(dept_div).change();
+
+                $("#dept_name").val(department);
+
+                $("#dept_sched").val(schedule_id).change();
+
+                $("#dept_is_active").val(is_active).change();
+
+            });
+
+            $("#save_department").on("click", function(){
+
+                var save_department =  $("#save_department").val();
+
+                var dept_code =   $("#dept_code").val();
+
+                var dept_div =   $("#dept_div").val();
+
+                var dept_name =   $("#dept_name").val();
+
+                var dept_sched =  $("#dept_sched").val();
+
+                var is_active =  $("#dept_is_active").val();
+
+                if(dept_code == ""){ $.notify("Code is Required", {type:"danger",icon:"close"}); return; }
+
+                if(dept_name == ""){ $.notify("Name is Required", {type:"danger",icon:"close"}); return; }
+
+                $.confirm({
+
+                            title: 'Save',
+
+                            content: 'Save Department Data',
+
+                            escapeKey: 'cancelAction',
+
+                            buttons: {
+
+                                confirm: {
+
+                                    btnClass: 'btn-green',
+
+                                    text: 'Yes',
+
+                                    action: function(){
+
+                                        $.ajax({
+
+                                            url: "{{route('save_department')}}",
+
+                                            data: {
+
+                                                save_department : save_department,
+
+                                                dept_code : dept_code,
+
+                                                dept_div : dept_div,
+
+                                                dept_name : dept_name,
+
+                                                dept_sched : dept_sched,
+
+                                                is_active : is_active,
+
+                                                _token : "{{csrf_token()}}", 
+
+                                            },
+
+                                                success: function (data) { 
+
+                                                    if(data == "duplicate"){
+
+                                                            $.notify("Code Already Exist", {type:"info",icon:"info"}); return;
+
+                                                    }else if(data == "true"){
+
+                                                        $.notify("Success", {type:"success",icon:"check"}); department_list(); 
+
+                                                        $('#department_modal').modal('hide');
+
+                                                        return;
+
+                                                    }else{
+
+                                                        $.notify("Failed", {type:"danger",icon:"close"}); return; 
+
+                                                    }                                           
+
+                                                },
+
+                                                dataType: 'json',
+
+                                                method: 'POST'
+
+                                            });
+
+                                    }
+
+                                    
+
+                                },
+
+                                cancelAction: {
+
+                                    btnClass: 'btn-gray',
+
+                                    text: 'No',
+
+                                    action: function(){
+
+                                    
+
+                                    }  
+
+                                }
+
+                            }
+
+                        });
+
+                });
+
+            function branch_list(){
+
+                    $('#branch_tbl').DataTable({
+
+                    "bDestroy": true,
+
+                    "autoWidth": false,
+
+                    "searchHighlight": true,
+
+                    "searching": true,
+
+                    "processing": true,
+
+                    "serverSide": true,
+
+                    "orderMulti": true,
+
+                    "order": [],
+
+                    "pageLength": 10,
+
+                    "ajax": {
+
+                        "url": "{{ route('branch_list') }}",
+
+                        "dataType": "json",
+
+                        "type": "POST",
+
+                        "data":{
+
+                            "_token": "{{ csrf_token() }}", 
+
+                            "page": "{{Route::current()->action['as']}}"  
+
+                            
+
+                        }
+
+                    },
+
+                    "columns":[
+
+                        {'data': 'code'},
+
+                        {'data': 'branch'},
+
+                        {'data': 'date_updated'},
+
+                        {'data': 'is_active'},
+
+                        {'data': 'action', 'orderable': false, 'searchable': false},
+
+                    ]
+
+                });
+
+			}
+
+            $('#branch_modal').on('show.bs.modal', function(e) {
+
+                var id = $(e.relatedTarget).data('id');
+
+                var code = $(e.relatedTarget).data('code');
+
+                var branch = $(e.relatedTarget).data('branch');
+
+                var schedule_id = $(e.relatedTarget).data('schedule_id');
+
+                var is_active = $(e.relatedTarget).data('is_active');
+
+                $("#save_branch").val(id);
+
+                $("#branch_code").val(code);
+
+                $("#branch_name").val(branch);
+
+                $("#branch_sched").val(schedule_id).change();
+
+                $("#branch_is_active").val(is_active).change();
+
+            });
+
+            $("#save_branch").on("click", function(){
+
+               var save_branch =  $("#save_branch").val();
+
+               var branch_code =  $("#branch_code").val();
+
+               var branch_name =  $("#branch_name").val();
+
+               var branch_sched =  $("#branch_sched").val();
+
+               var is_active =  $("#branch_is_active").val();
+
+                if(branch_code == ""){ $.notify("Code is Required", {type:"danger",icon:"close"}); return; }
+
+                if(branch_name == ""){ $.notify("Name is Required", {type:"danger",icon:"close"}); return; }
+
+                $.confirm({
+
+							title: 'Save',
+
+							content: 'Save Branch Data',
+
+							escapeKey: 'cancelAction',
+
+							buttons: {
+
+								confirm: {
+
+									btnClass: 'btn-green',
+
+									text: 'Yes',
+
+									action: function(){
+
+                                        $.ajax({
+
+                                            url: "{{route('save_branch')}}",
+
+                                            data: {
+
+                                                save_branch : save_branch,
+
+                                                branch_code : branch_code,
+
+                                                branch_name : branch_name,
+
+                                                branch_sched : branch_sched,
+
+                                                is_active : is_active,
+
+                                                _token : "{{csrf_token()}}", 
+
+                                            },
+
+                                                success: function (data) { 
+
+                                                    if(data == "duplicate"){
+
+                                                            $.notify("Code Already Exist", {type:"info",icon:"info"}); return;
+
+                                                    }else if(data == "true"){
+
+                                                        $.notify("Success", {type:"success",icon:"check"}); branch_list(); 
+
+                                                        $('#branch_modal').modal('hide');
+
+                                                        return;
+
+                                                    }else{
+
+                                                        $.notify("Failed", {type:"danger",icon:"close"}); return; 
+
+                                                    }
+
+                                                    
+
+                                                },
+
+                                                dataType: 'json',
+
+                                                method: 'POST'
+
+                                            });
+
+									}
+
+									
+
+								},
+
+								cancelAction: {
+
+									btnClass: 'btn-gray',
+
+									text: 'No',
+
+									action: function(){
+
+									
+
+									}  
+
+								}
+
+							}
+
+						});
+
+                
+
+            });
+
+            function position_list(){
+
+                    $('#position_tbl').DataTable({
+
+                    "bDestroy": true,
+
+                    "autoWidth": false,
+
+                    "searchHighlight": true,
+
+                    "searching": true,
+
+                    "processing": true,
+
+                    "serverSide": true,
+
+                    "orderMulti": true,
+
+                    "order": [],
+
+                    "pageLength": 10,
+
+                    "ajax": {
+
+                        "url": "{{ route('position_list') }}",
+
+                        "dataType": "json",
+
+                        "type": "POST",
+
+                        "data":{
+
+                            "_token": "{{ csrf_token() }}", 
+
+                            "page": "{{Route::current()->action['as']}}"  
+
+                            
+
+                        }
+
+                    },
+
+                    "columns":[
+
+                        {'data': 'code'},
+
+                        {'data': 'name'},
+
+                        {'data': 'type'},
+
+                        {'data': 'date_updated'},
+
+                        {'data': 'is_active'},
+
+                        {'data': 'action', 'orderable': false, 'searchable': false},
+
+                    ]
+
+                });
+
+			}
+
+            $('#position_modal').on('show.bs.modal', function(e) {
+
+                var id = $(e.relatedTarget).data('id');
+
+                var code = $(e.relatedTarget).data('code');
+
+                var name = $(e.relatedTarget).data('name');
+
+                var rf = $(e.relatedTarget).data('rf');
+
+                var is_active = $(e.relatedTarget).data('is_active');
+
+                $("#save_position").val(id);
+
+                $("#pos_code").val(code);
+
+                $("#pos_name").val(name);
+
+                $("#pos_type").val(rf).change();
+
+                $("#pos_is_active").val(is_active).change();
+
+            });
+
+            $("#save_position").on("click", function(){
+
+                    var save_position =  $("#save_position").val();
+
+                    var pos_code =  $("#pos_code").val();
+
+                    var pos_name =  $("#pos_name").val();
+
+                    var pos_type =  $("#pos_type").val();
+
+                    var is_active =  $("#pos_is_active").val();
+
+                    if(pos_code == ""){ $.notify("Code is Required", {type:"danger",icon:"close"}); return; }
+
+                    if(pos_name == ""){ $.notify("Name is Required", {type:"danger",icon:"close"}); return; }
+
+                    $.confirm({
+
+                                title: 'Save',
+
+                                content: 'Save Position Data',
+
+                                escapeKey: 'cancelAction',
+
+                                buttons: {
+
+                                    confirm: {
+
+                                        btnClass: 'btn-green',
+
+                                        text: 'Yes',
+
+                                        action: function(){
+
+                                            $.ajax({
+
+                                                url: "{{route('save_position')}}",
+
+                                                data: {
+
+                                                    save_position : save_position,
+
+                                                    pos_code : pos_code,
+
+                                                    pos_name : pos_name,
+
+                                                    pos_type : pos_type,
+
+                                                    is_active : is_active,
+
+                                                    _token : "{{csrf_token()}}", 
+
+                                                },
+
+                                                    success: function (data) { 
+
+                                                        if(data == "duplicate"){
+
+                                                                $.notify("Code Already Exist", {type:"info",icon:"info"}); return;
+
+                                                        }else if(data == "true"){
+
+                                                            $.notify("Success", {type:"success",icon:"check"}); position_list(); 
+
+                                                            $('#position_modal').modal('hide');
+
+                                                            return;
+
+                                                        }else{
+
+                                                            $.notify("Failed", {type:"danger",icon:"close"}); return; 
+
+                                                        }
+
+                                                        
+
+                                                    },
+
+                                                    dataType: 'json',
+
+                                                    method: 'POST'
+
+                                                });
+
+                                        }
+
+                                        
+
+                                    },
+
+                                    cancelAction: {
+
+                                        btnClass: 'btn-gray',
+
+                                        text: 'No',
+
+                                        action: function(){
+
+                                        
+
+                                        }  
+
+                                    }
+
+                                }
+
+                            });
+
+                    
+
+                    });
+
+                    
+
+            function designation_list(){
+
+                    $('#designation_tbl').DataTable({
+
+                    "bDestroy": true,
+
+                    "autoWidth": false,
+
+                    "searchHighlight": true,
+
+                    "searching": true,
+
+                    "processing": true,
+
+                    "serverSide": true,
+
+                    "orderMulti": true,
+
+                    "order": [],
+
+                    "pageLength": 10,
+
+                    "ajax": {
+
+                        "url": "{{ route('designation_list') }}",
+
+                        "dataType": "json",
+
+                        "type": "POST",
+
+                        "data":{
+
+                            "_token": "{{ csrf_token() }}", 
+
+                            "page": "{{Route::current()->action['as']}}"  
+
+                            
+
+                        }
+
+                    },
+
+                    "columns":[
+
+                        {'data': 'code'},
+
+                        {'data': 'name'},
+
+                        {'data': 'date_updated'},
+
+                        {'data': 'is_active'},
+
+                        {'data': 'action', 'orderable': false, 'searchable': false},
+
+                    ]
+
+                });
+
+			}
+
+                    
+
+            $('#designation_modal').on('show.bs.modal', function(e) {
+
+                var id = $(e.relatedTarget).data('id');
+
+                var code = $(e.relatedTarget).data('code');
+
+                var name = $(e.relatedTarget).data('name');
+
+                var is_active = $(e.relatedTarget).data('is_active');
+
+                $("#save_designation").val(id);
+
+                $("#des_code").val(code);
+
+                $("#des_name").val(name);
+
+                $("#des_is_active").val(is_active).change();
+
+            });
+
+            $("#save_designation").on("click", function(){
+
+                    var save_designation =  $("#save_designation").val();
+
+                    var des_code =  $("#des_code").val();
+
+                    var des_name =  $("#des_name").val();
+
+                    var is_active =  $("#des_is_active").val();
+
+                    if(des_code == ""){ $.notify("Code is Required", {type:"danger",icon:"close"}); return; }
+
+                    if(des_name == ""){ $.notify("Name is Required", {type:"danger",icon:"close"}); return; }
+
+                    $.confirm({
+
+                                title: 'Save',
+
+                                content: 'Save Designation Data',
+
+                                escapeKey: 'cancelAction',
+
+                                buttons: {
+
+                                    confirm: {
+
+                                        btnClass: 'btn-green',
+
+                                        text: 'Yes',
+
+                                        action: function(){
+
+                                            $.ajax({
+
+                                                url: "{{route('save_designation')}}",
+
+                                                data: {
+
+                                                    save_designation : save_designation,
+
+                                                    des_code : des_code,
+
+                                                    des_name : des_name,
+
+                                                    is_active : is_active,
+
+                                                    _token : "{{csrf_token()}}", 
+
+                                                },
+
+                                                    success: function (data) { 
+
+                                                        if(data == "duplicate"){
+
+                                                                $.notify("Code Already Exist", {type:"info",icon:"info"}); return;
+
+                                                        }else if(data == "true"){
+
+                                                            $.notify("Success", {type:"success",icon:"check"}); designation_list(); 
+
+                                                            $('#designation_modal').modal('hide');
+
+                                                            return;
+
+                                                        }else{
+
+                                                            $.notify("Failed", {type:"danger",icon:"close"}); return; 
+
+                                                        }
+
+                                                        
+
+                                                    },
+
+                                                    dataType: 'json',
+
+                                                    method: 'POST'
+
+                                                });
+
+                                        }
+
+                                        
+
+                                    },
+
+                                    cancelAction: {
+
+                                        btnClass: 'btn-gray',
+
+                                        text: 'No',
+
+                                        action: function(){
+
+                                        
+
+                                        }  
+
+                                    }
+
+                                }
+
+                            });
+
+                    
+
+                    });
+
+</script>
+
+@stop
+

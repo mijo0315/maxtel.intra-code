@@ -1,0 +1,10 @@
+    .jconfirm .jconfirm-box {
+        background: white;
+        border-radius: 4px;
+        position: relative;
+        outline: 0;
+        padding: 15px 15px 0;
+        overflow: hidden;
+        margin-left: 38.33%; /*(modification)*/
+        margin-right: 35%; /*(modification)*/
+    }

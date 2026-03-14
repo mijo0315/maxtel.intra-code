@@ -1,0 +1,2312 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+use Auth;
+use DB;
+use Storage;
+use Yajra\DataTables\DataTables;
+use DateTime;
+use DateTimeZone; //update raw logs
+use DateInterval;
+use DatePeriod;
+use Maatwebsite\Excel\Facades\Excel; //add export btn
+use App\Exports\LogsExport; //add export btn
+use App\Exports\OTApplyExport;
+class timekeepingController extends Controller
+{
+
+      public function process_logs_crontab(Request $request){
+        DB::beginTransaction();
+        $now = date("Y-m-d");
+        $yesterday = date("Y-m-d", strtotime($from . " -1 day"));
+
+        try {
+            $logs = DB::connection("intra_payroll")->table("tbl_raw_logs")
+            ->join("tbl_employee", "bio_id", "=", "biometric_id")
+            ->whereBetween("logs",[$yesterday, $now])
+            ->where("biometric_id", "!=", "")
+            ->orderBy("tbl_raw_logs.logs", "ASC")
+            ->orderBy("state")
+            ->get();
+
+            foreach($logs  as $log_data){
+                
+                $target_date = date("Y-m-d", strtotime($log_data->logs));
+                $log_info = strtotime($log_data->logs);
+                //CHECK TC
+                $tc = DB::connection("intra_payroll")->table("tbl_timecard")
+                    ->where("emp_id", $log_data->id)
+                    ->where("target_date", $target_date)
+                    ->first();
+                if($tc != null){
+                    $tc =json_decode(json_encode($tc), true);
+                    if($log_data->state == "FLEX_IN" || $log_data->state == "FLEX_OUT" ){
+                        
+                    }else{
+                        $inserted_time = $tc[$log_data->state];
+                    }
+                    
+                    if($log_data->state == "AM_IN" || $log_data->state == "PM_IN" || $log_data->state == "OT_IN")
+                    {
+                        if($inserted_time != "" || $inserted_time != null){
+                            $current = strtotime($inserted_time);
+                                if($log_info < $current){
+                                    DB::connection("intra_payroll")->table("tbl_timecard")
+                                        ->where("emp_id", $tc["emp_id"])
+                                        ->where("target_date", $target_date)
+                                        ->where("is_manual", 0)
+                                        ->update([
+                                            $log_data->state => $log_data->logs,
+                                            "user_id" => Auth::user()->id
+                                        ]);
+                                }
+                        }else{
+                            DB::connection("intra_payroll")->table("tbl_timecard")
+                                ->where("emp_id", $tc["emp_id"])
+                                ->where("target_date", $target_date)
+                                ->where("is_manual", 0)
+                                ->update([
+                                    $log_data->state => $log_data->logs,
+                                    "user_id" => Auth::user()->id
+                                ]);
+                        }
+                    }
+                    elseif($log_data->state == "AM_OUT" || $log_data->state == "PM_OUT" || $log_data->state == "OT_OUT"){
+                        if($inserted_time != "" || $inserted_time != null){
+                            $current = strtotime($inserted_time);
+                                if($log_info > $current){
+                                    DB::connection("intra_payroll")->table("tbl_timecard")
+                                        ->where("emp_id", $tc["emp_id"])
+                                        ->where("target_date", $target_date)
+                                        ->where("is_manual", 0)
+                                        ->update([
+                                            $log_data->state => $log_data->logs,
+                                            "user_id" => Auth::user()->id
+                                        ]);
+                                }
+                        }else{
+                            DB::connection("intra_payroll")->table("tbl_timecard")
+                                ->where("emp_id", $tc["emp_id"])
+                                ->where("target_date", $target_date)
+                                ->where("is_manual", 0)
+                                ->update([
+                                    $log_data->state => $log_data->logs,
+                                    "user_id" => Auth::user()->id
+                                ]);
+                        }
+                    }else{
+                        if($log_data->state == "FLEX_OUT"){
+                            $tc_flex = DB::connection("intra_payroll")->table("tbl_timecard")
+                                ->where("emp_id", $tc["emp_id"])
+                                ->where("target_date", $target_date)
+                                ->where("is_manual", 0)
+                                ->first();
+                            
+                            if($tc_flex != NULL){
+
+                                    // dd($tc_flex);"2023-08-23 23:16:36
+                                $flex_in_log =strtotime($tc_flex->AM_IN);
+                                $flex_out_log = strtotime($log_data->logs);
+                                // dd($log_data->logs);"2023-08-23 23:20:25"
+
+                                $time_consume = $flex_in_log - $flex_out_log;
+                                
+
+                                $total_consume = round(abs($time_consume) / 60,2);
+                                // dd($total_consume);
+
+                                $hours = $total_consume / 60;
+                                
+                                
+                                $total_hours = $tc_flex->flexi_hours + $hours;
+                            
+                          
+
+                                DB::connection("intra_payroll")->table("tbl_timecard")
+                                ->where("emp_id", $tc["emp_id"])
+                                ->where("target_date", $target_date)
+                                ->where("is_manual", 0)
+                                ->update([
+                                    "AM_IN" => NULL,
+                                    "user_id" => Auth::user()->id,
+                                    "flexi_hours" => $total_hours
+                                ]);
+                            
+                            }
+                        }elseif($log_data->state == "FLEX_IN"){
+                            DB::connection("intra_payroll")->table("tbl_timecard")
+                            ->where("emp_id", $tc["emp_id"])
+                            ->where("target_date", $target_date)
+                            ->where("is_manual", 0)
+                            ->update([
+                                "AM_IN" => $log_data->logs,
+                                "user_id" => Auth::user()->id,
+                            ]);
+
+                        }
+
+
+                    }
+                    
+                }else{
+
+                    if($log_data->state == "OT_IN" || $log_data->state == "OT_OUT"){
+                        //CHECK IF HAS IN AND OUT
+                        $tc2 = DB::connection("intra_payroll")->table("tbl_timecard")
+                            ->where("emp_id", $log_data->id)
+                            ->where("target_date", $target_date)
+                            ->where("AM_IN", "!=", NULL)
+                            ->orWhere("emp_id", $log_data->id)
+                            ->where("target_date", $target_date)
+                            ->where("AM_IN", "!=", "")
+                            
+                            ->first();
+                        if($tc2 != null){
+                            $log2 = strtotime($tc2->logs);
+                            $current_log = strtotime($log_data->logs);
+
+                                if($log2 > $current_log){
+                                    $target_date = date("Y-m-d", strtotime($target_date ." -1 day"));
+                                }
+
+                                $tc3 = DB::connection("intra_payroll")->table("tbl_timecard")
+                                ->where("emp_id", $log_data->id)
+                                ->where("target_date", $target_date)
+                                ->first();
+                                if($tc3 != null){
+                                    DB::connection("intra_payroll")->table("tbl_timecard")
+                                        ->where("emp_id", $tc["emp_id"])
+                                        ->where("target_date", $target_date)
+                                        ->where("is_manual", 0)
+                                        ->update([
+                                            $log_data->state => $log_data->logs,
+                                            "user_id" => Auth::user()->id
+                                        ]);
+                                }else{
+                                    DB::connection("intra_payroll")->table("tbl_timecard")
+                                        ->insert([
+                                            $log_data->state => $log_data->logs,
+                                            "user_id" => Auth::user()->id,
+                                            "target_date" => $target_date,
+                                            "emp_id" => $log_data->id
+                                        ]);
+                                }
+                        }else{
+                            DB::connection("intra_payroll")->table("tbl_timecard")
+                                        ->insert([
+                                            $log_data->state => $log_data->logs,
+                                            "user_id" => Auth::user()->id,
+                                            "target_date" => $target_date,
+                                            "emp_id" => $log_data->id
+                                        ]);
+                        }
+
+
+
+
+                    }elseif($log_data->state == "AM_IN" || $log_data->state == "AM_OUT" || $log_data->state == "PM_IN" || $log_data->state == "PM_OUT"){
+                        DB::connection("intra_payroll")->table("tbl_timecard")
+                        ->insert([
+                            $log_data->state => $log_data->logs,
+                            "user_id" => Auth::user()->id,
+                            "target_date" => $target_date,
+                            "emp_id" => $log_data->id
+                        ]);
+                    }else{
+                        if($log_data->state == "FLEX_IN"){
+                            DB::connection("intra_payroll")->table("tbl_timecard")
+                            ->insert([
+                                "AM_IN" => $log_data->logs,
+                                "user_id" => Auth::user()->id,
+                                "target_date" => $target_date,
+                                "emp_id" => $log_data->id
+                            ]);
+                        }
+
+                    }
+
+
+
+                  
+                }
+            }
+
+            DB::commit();
+            return json_encode("Success");
+        } catch (\Throwable $th) {
+            DB::rollback();
+            return json_encode($th->getMessage());
+        }
+
+
+    }
+
+
+    public function process_raw_logs(Request $request){
+        DB::beginTransaction();
+
+        try {
+            $logs = DB::connection("intra_payroll")->table("tbl_raw_logs")
+            ->join("tbl_employee", "bio_id", "=", "biometric_id")
+            ->whereBetween("logs",[$request->tc_from, $request->tc_to])
+            ->where("biometric_id", "!=", "")
+            ->orderBy("tbl_raw_logs.logs", "ASC")
+            ->orderBy("state")
+            ->get();
+
+            foreach($logs  as $log_data){
+                
+                $target_date = date("Y-m-d", strtotime($log_data->logs));
+                $log_info = strtotime($log_data->logs);
+                //CHECK TC
+                $tc = DB::connection("intra_payroll")->table("tbl_timecard")
+                    ->where("emp_id", $log_data->id)
+                    ->where("target_date", $target_date)
+                    ->first();
+                if($tc != null){
+                    $tc =json_decode(json_encode($tc), true);
+                    if($log_data->state == "FLEX_IN" || $log_data->state == "FLEX_OUT" ){
+                        
+                    }else{
+                        $inserted_time = $tc[$log_data->state];
+                    }
+                    
+                    if($log_data->state == "AM_IN" || $log_data->state == "PM_IN" || $log_data->state == "OT_IN")
+                    {
+                        if($inserted_time != "" || $inserted_time != null){
+                            $current = strtotime($inserted_time);
+                                if($log_info < $current){
+                                    DB::connection("intra_payroll")->table("tbl_timecard")
+                                        ->where("emp_id", $tc["emp_id"])
+                                        ->where("target_date", $target_date)
+                                        ->where("is_manual", 0)
+                                        ->update([
+                                            $log_data->state => $log_data->logs,
+                                            "user_id" => Auth::user()->id
+                                        ]);
+                                }
+                        }else{
+                            DB::connection("intra_payroll")->table("tbl_timecard")
+                                ->where("emp_id", $tc["emp_id"])
+                                ->where("target_date", $target_date)
+                                ->where("is_manual", 0)
+                                ->update([
+                                    $log_data->state => $log_data->logs,
+                                    "user_id" => Auth::user()->id
+                                ]);
+                        }
+                    }
+                    elseif($log_data->state == "AM_OUT" || $log_data->state == "PM_OUT" || $log_data->state == "OT_OUT"){
+                        if($inserted_time != "" || $inserted_time != null){
+                            $current = strtotime($inserted_time);
+                                if($log_info > $current){
+                                    DB::connection("intra_payroll")->table("tbl_timecard")
+                                        ->where("emp_id", $tc["emp_id"])
+                                        ->where("target_date", $target_date)
+                                        ->where("is_manual", 0)
+                                        ->update([
+                                            $log_data->state => $log_data->logs,
+                                            "user_id" => Auth::user()->id
+                                        ]);
+                                }
+                        }else{
+                            DB::connection("intra_payroll")->table("tbl_timecard")
+                                ->where("emp_id", $tc["emp_id"])
+                                ->where("target_date", $target_date)
+                                ->where("is_manual", 0)
+                                ->update([
+                                    $log_data->state => $log_data->logs,
+                                    "user_id" => Auth::user()->id
+                                ]);
+                        }
+                    }else{
+                        if($log_data->state == "FLEX_OUT"){
+                            $tc_flex = DB::connection("intra_payroll")->table("tbl_timecard")
+                                ->where("emp_id", $tc["emp_id"])
+                                ->where("target_date", $target_date)
+                                ->first();
+                            
+                            if($tc_flex != NULL){
+
+                                    // dd($tc_flex);"2023-08-23 23:16:36
+                                $flex_in_log =strtotime($tc_flex->AM_IN);
+                                $flex_out_log = strtotime($log_data->logs);
+                                // dd($log_data->logs);"2023-08-23 23:20:25"
+
+                                $time_consume = $flex_in_log - $flex_out_log;
+                                
+
+                                $total_consume = round(abs($time_consume) / 60,2);
+                                // dd($total_consume);
+
+                                $hours = $total_consume / 60;
+                                
+                                
+                                $total_hours = $tc_flex->flexi_hours + $hours;
+                            
+                          
+
+                                DB::connection("intra_payroll")->table("tbl_timecard")
+                                ->where("emp_id", $tc["emp_id"])
+                                ->where("target_date", $target_date)
+                                ->where("is_manual", 0)
+                                ->update([
+                                    "AM_IN" => NULL,
+                                    "user_id" => Auth::user()->id,
+                                    "flexi_hours" => $total_hours
+                                ]);
+                            
+                            }
+                        }elseif($log_data->state == "FLEX_IN"){
+                            DB::connection("intra_payroll")->table("tbl_timecard")
+                            ->where("emp_id", $tc["emp_id"])
+                            ->where("target_date", $target_date)
+                            ->where("is_manual", 0)
+                            ->update([
+                                "AM_IN" => $log_data->logs,
+                                "user_id" => Auth::user()->id,
+                            ]);
+
+                        }
+
+
+                    }
+                    
+                }else{
+
+                    if($log_data->state == "OT_IN" || $log_data->state == "OT_OUT"){
+                        //CHECK IF HAS IN AND OUT
+                        $tc2 = DB::connection("intra_payroll")->table("tbl_timecard")
+                            ->where("emp_id", $log_data->id)
+                            ->where("target_date", $target_date)
+                            ->where("AM_IN", "!=", NULL)
+                            ->orWhere("emp_id", $log_data->id)
+                            ->where("target_date", $target_date)
+                            ->where("AM_IN", "!=", "")
+                            
+                            ->first();
+                        if($tc2 != null){
+                            $log2 = strtotime($tc2->logs);
+                            $current_log = strtotime($log_data->logs);
+
+                                if($log2 > $current_log){
+                                    $target_date = date("Y-m-d", strtotime($target_date ." -1 day"));
+                                }
+
+                                $tc3 = DB::connection("intra_payroll")->table("tbl_timecard")
+                                ->where("emp_id", $log_data->id)
+                                ->where("target_date", $target_date)
+                                ->first();
+                                if($tc3 != null){
+                                    DB::connection("intra_payroll")->table("tbl_timecard")
+                                        ->where("emp_id", $tc["emp_id"])
+                                        ->where("target_date", $target_date)
+                                        ->where("is_manual", 0)
+                                        ->update([
+                                            $log_data->state => $log_data->logs,
+                                            "user_id" => Auth::user()->id
+                                        ]);
+                                }else{
+                                    DB::connection("intra_payroll")->table("tbl_timecard")
+                                        ->insert([
+                                            $log_data->state => $log_data->logs,
+                                            "user_id" => Auth::user()->id,
+                                            "target_date" => $target_date,
+                                            "emp_id" => $log_data->id
+                                        ]);
+                                }
+                        }else{
+                            DB::connection("intra_payroll")->table("tbl_timecard")
+                                        ->insert([
+                                            $log_data->state => $log_data->logs,
+                                            "user_id" => Auth::user()->id,
+                                            "target_date" => $target_date,
+                                            "emp_id" => $log_data->id
+                                        ]);
+                        }
+
+
+
+
+                    }elseif($log_data->state == "AM_IN" || $log_data->state == "AM_OUT" || $log_data->state == "PM_IN" || $log_data->state == "PM_OUT"){
+                        DB::connection("intra_payroll")->table("tbl_timecard")
+                        ->insert([
+                            $log_data->state => $log_data->logs,
+                            "user_id" => Auth::user()->id,
+                            "target_date" => $target_date,
+                            "emp_id" => $log_data->id
+                        ]);
+                    }else{
+                        if($log_data->state == "FLEX_IN"){
+                            DB::connection("intra_payroll")->table("tbl_timecard")
+                            ->insert([
+                                "AM_IN" => $log_data->logs,
+                                "user_id" => Auth::user()->id,
+                                "target_date" => $target_date,
+                                "emp_id" => $log_data->id
+                            ]);
+                        }
+
+                    }
+
+
+
+                  
+                }
+            }
+
+            DB::commit();
+            return json_encode("Success");
+        } catch (\Throwable $th) {
+            DB::rollback();
+            return json_encode($th->getMessage());
+        }
+
+
+    }
+ public function timecard_logs_tbl(Request $request){
+        
+        $emp_id = $request->emp_id;
+        
+        $start_date = date("Y-m-01");
+        $end_date = date("Y-m-d");
+
+        if ($request->filled('date_range')) {
+            $arr = explode(' - ', $request->date_range);
+             $start_date = $arr[0];
+             $end_date = $arr[1];
+         }
+ 
+
+
+
+        $data =DB::connection("intra_payroll")->table("tbl_timecard")->where("emp_id", $emp_id)
+                ->whereBetween("target_date", [$start_date, $end_date])
+                ->orderBy("target_date", "DESC")
+                ->get();
+        
+        
+
+        $data_tbl = collect($data);
+
+
+        return Datatables::of($data_tbl)
+        
+        ->addColumn('action', function($row){
+            $btn = "";
+                    $btn .= "<a 
+                    class='btn btn-sm btn-success mr-1'
+                        data-toggle='modal' 
+                        data-target='#timeModal'
+                        data-am_in = '$row->AM_IN'
+                        data-am_out = '$row->AM_OUT'
+                        data-pm_in = '$row->PM_IN'
+                        data-pm_out = '$row->PM_OUT'
+                        data-date_target = '$row->target_date'
+
+                    >
+                    Edit
+                    </a>";
+            return $btn;
+        })
+        ->rawColumns(['action'])
+        ->make(true);
+
+
+    }
+
+    public function manual_in_out(Request $request) {
+        $check = DB::connection("intra_payroll")->table("tbl_timecard")
+            ->where("emp_id", $request->emp_id)
+            ->where("target_date", $request->date_target)
+            ->first();
+    
+        // Convert times only if they are not null
+        $amTimeIn  = !empty($request->amTimeIn)  ? date("Y-m-d H:i:s", strtotime($request->amTimeIn))  : null;
+        $amTimeOut = !empty($request->amTimeOut) ? date("Y-m-d H:i:s", strtotime($request->amTimeOut)) : null;
+        $pmTimeIn  = !empty($request->pmTimeIn)  ? date("Y-m-d H:i:s", strtotime($request->pmTimeIn))  : null;
+        $pmTimeOut = !empty($request->pmTimeOut) ? date("Y-m-d H:i:s", strtotime($request->pmTimeOut)) : null;
+    
+        if ($check != null) {
+            DB::connection("intra_payroll")->table("tbl_timecard")
+                ->where("emp_id", $request->emp_id)
+                ->where("target_date", $request->date_target)
+                ->update([
+                    "AM_IN" => $amTimeIn,
+                    "AM_OUT" => $amTimeOut,
+                    "PM_IN" => $pmTimeIn,
+                    "PM_OUT" => $pmTimeOut,
+                    "is_manual" => "1"
+                ]);
+        } else {
+            DB::connection("intra_payroll")->table("tbl_timecard")
+                ->insert([
+                    "AM_IN" => $amTimeIn,
+                    "AM_OUT" => $amTimeOut,
+                    "PM_IN" => $pmTimeIn,
+                    "PM_OUT" => $pmTimeOut,
+                    "is_manual" => "1",
+                    "emp_id" => $request->emp_id,
+                    "target_date" => $request->date_target,
+                    "user_id" => Auth::user()->id
+                ]);
+        }
+    
+        return json_encode("Success");
+    }
+
+    public function raw_logs_tbl(Request $request){
+        $emp = DB::connection("intra_payroll")->table("tbl_employee")
+            ->where("id", $request->emp_id)
+            ->first();
+        if($emp != null){
+            $bio_id = $emp->bio_id;
+        }else{
+            $bio_id = "0";
+        }
+
+
+        $logs = DB::connection("intra_payroll")->table("tbl_raw_logs")
+            ->where("biometric_id", $bio_id);
+
+        // Filter by date range
+        if ($request->filled('date_range')) {
+            [$start_date, $end_date] = explode(' - ', $request->date_range);
+            $logs->whereBetween('logs', [$start_date . ' 00:00:00', $end_date . ' 23:59:59']);
+        }
+
+        $logs = $logs->orderBy("logs", "DESC")->get();
+        $array = collect($logs);
+
+        return Datatables::of($array)
+                ->addColumn('state', function($row){
+                    
+                    if($row->state == "AM_IN"){
+                        return "<div class='btn btn-success btn-sm'>AM IN</div>";
+                    }elseif($row->state == "AM_OUT"){
+                        return "<div class='btn btn-warning btn-sm'>AM OUT</div>";
+                    }elseif($row->state == "PM_IN"){
+                        return "<div class='btn btn-success btn-sm'>PM IN</div>";
+                    }elseif($row->state == "PM_OUT"){
+                        return "<div class='btn btn-warning btn-sm'>PM OUT</div>";
+                    }elseif($row->state == "OT_IN"){
+                        return "<div class='btn btn-success btn-sm'>OT IN</div>";
+                    }elseif($row->state == "OT_OUT"){
+                        return "<div class='btn btn-warning btn-sm'>OT OUT</div>";
+                    }elseif($row->state == "FLEX_IN"){
+                        return "<div class='btn btn-warning btn-sm'>START TIME</div>";
+                    }elseif($row->state == "FLEX_OUT"){
+                        return "<div class='btn btn-warning btn-sm'>END TIME</div>";
+                    }
+                    
+                    else{
+                        return "<div class='btn btn-dark btn-sm'>UNKNOWN</div>";
+                    }
+                    
+             
+
+
+                })
+                // update raw logs
+                ->addColumn('logs', function($row){
+                     return date('Y-m-d H:i:s', strtotime($row->logs));
+
+                    //$currentDate = $row->logs;
+                    //$date = new DateTime($currentDate, new DateTimeZone('UTC'));
+                    // Set the timezone to Asia/Manila
+                    //$date->setTimezone(new DateTimeZone('Asia/Manila'));
+                    //return $date->format('Y-m-d H:i:s');
+                })
+               ->addColumn('location', function ($row) {
+                    if (!empty($row->location)) {
+                        return $row->location;
+                    }
+                    return "No Data";
+                })
+                ->rawColumns(['state','logs', 'location'])
+            ->make(true);
+
+
+    }
+
+    public function get_employee_info(Request $request){
+        $emp = DB::connection("intra_payroll")->table("tbl_employee")
+            ->where("id", $request->id)
+            ->first();
+            $return_array = array();
+            if($emp != null){
+                return json_encode(true);
+            }else{
+                return json_encode(false);
+            }
+
+        
+    }
+
+
+    public function set_holiday(Request $request){
+        DB::beginTransaction();
+        try {
+            $target_day = date("Y-m-d", strtotime($request->holiday_target_day));
+            if($request->holiday_type == "0"){
+                $tbl_holiday = DB::connection("intra_payroll")->table("tbl_holiday")
+                ->where("holiday_date", $target_day)
+                ->delete();
+            }else{
+                $tbl_holiday = DB::connection("intra_payroll")->table("tbl_holiday")
+                ->where("holiday_date", $target_day)
+                ->first();
+                if($tbl_holiday != null){
+                    DB::connection("intra_payroll")->table("tbl_holiday")
+                        ->where("id", $tbl_holiday->id)
+                        ->update([
+                            "holiday_name" => $request->holiday_name,
+                            "holiday_type" => $request->holiday_type,
+                            "user_id" => Auth::user()->id
+                        ]);
+                }else{
+                    DB::connection("intra_payroll")->table("tbl_holiday")
+                        ->insert([
+                            "holiday_date" => $target_day,
+                            "holiday_name" => $request->holiday_name,
+                            "holiday_type" => $request->holiday_type,
+                            "date_created" => date("Y-m-d H:i:s"),
+                            "user_id" => Auth::user()->id
+                        ]);
+                }
+
+            }
+            
+            DB::commit();
+            return json_encode($target_day);
+        } catch (\Throwable $th) {
+            DB::rollback();
+            return json_encode("failed");
+        }
+       
+    }
+
+    public function get_holiday(Request $request){
+        $date_from = $request->month_view;
+        $date_from_year = date("Y", strtotime($date_from));
+        $date_from_month = date("m", strtotime($date_from));
+        $date_from_day = date("d", strtotime($date_from));
+        if($date_from_day > 1){
+            $date_from = date("Y-m-01", strtotime($date_from . ' +1 month'));
+        }
+        // dd($date_from);
+
+        $date_to = date("Y-m-t", strtotime($date_from));
+        $data_days = array();
+        $cur_day = $date_from;
+        $tbl_holiday = DB::connection("intra_payroll")->table("tbl_holiday")->whereBetween("holiday_date",[$date_from, $date_to])->get();
+            $tbl_holiday = json_decode(json_encode($tbl_holiday), true);
+
+        if(Auth::user()->access[$request->page]["user_type"] != "employee"){
+            $is_edit = "1";
+        }else{
+            $is_edit = "0";
+        }
+        do{
+            $data = $this->search_multi_array($tbl_holiday, "holiday_date", $cur_day);
+            $color = "";
+            if(isset($data["holiday_type"])){
+                if($data["holiday_type"] == "RH"){
+                    $color = "#48db66";
+                }elseif($data["holiday_type"] == "SH"){
+                    $color = "#555ce6";
+                }
+
+                if($color != ""){
+                    array_push($data_days,array(
+                        'title' => $data["holiday_name"] . " (".$data["holiday_type"].")",
+                        'start' => $cur_day,
+                        'color'  => $color,
+                        'extendedProps' => array(
+                                    "is_edit" => $is_edit, 
+                                    "type" => $data["holiday_type"],
+                                    "name" => $data["holiday_name"]
+                                )
+                    ));
+
+                }
+            
+               
+            }
+
+
+           
+         
+            $cur_day = date('Y-m-d', strtotime($cur_day . ' +1 day'));
+
+        }while(strtotime($cur_day) <= strtotime($date_to));
+      
+        return response()->json($data_days);
+    }
+
+    function search_multi_array($array, $key, $value) {
+        foreach ($array as $subarray) {
+            if (isset($subarray[$key]) && $subarray[$key] == $value) {
+                return $subarray;
+            }
+        }
+        return null;
+    }
+
+    public function timekeeping_management(){
+      
+        if(Auth::user()->access["timekeeping_management"]["user_type"] != "employee"){
+            $tbl_employee = DB::connection("intra_payroll")->table("tbl_employee")
+            ->where('is_active', 1)
+            ->orderBy("last_name")
+            ->orderBy("first_name")
+            ->orderBy("middle_name")
+            ->get();
+
+       
+        }else{
+            $tbl_employee = DB::connection("intra_payroll")->table("tbl_employee")
+            ->where('is_active', 1)
+            ->where("id",Auth::user()->company["linked_employee"]["id"])
+            ->orderBy("last_name")
+            ->orderBy("first_name")
+            ->orderBy("middle_name")
+            ->get();
+
+        }
+
+
+        $lib_week_schedule = DB::connection("intra_payroll")->table("lib_week_schedule")
+        ->where('is_active', 1)
+        ->orderBy("name")
+        ->get();
+
+        $lib_schedule = DB::connection("intra_payroll")->table("lib_schedule")
+        ->where("is_active", 1)
+        ->get();
+        
+      
+
+        return view("timekeeping.index")
+            ->with("tbl_employee", $tbl_employee)
+            ->with("lib_week_schedule", $lib_week_schedule)
+            ->with("lib_schedule", $lib_schedule)
+            ;
+    }
+
+    public function ot_table_tbl(Request $request){
+        $page_permission = Auth::user()->access[$request->page]["access"];
+   
+        $data = DB::connection("intra_payroll")->table("lib_ot_table")
+            ->orderBy("name")
+            ->get();
+
+        $data = collect($data);
+
+        return Datatables::of($data)
+        ->addColumn('action', function($row) use ($page_permission, $request){
+            $btn = "";
+            if(preg_match("/U/i", $page_permission)){
+                if(Auth::user()->access[$request->page]["user_type"] != "employee"){
+                    $type = "ot_table";
+                    $btn .= "<a 
+                    class='btn btn-sm btn-success mr-1'
+                    data-id = '".$row->id."'
+                    data-code = '".$row->code."'
+                    data-name = '".$row->name."'
+                    data-rate = '".$row->rate."'    
+                    data-toggle='modal' 
+                    data-target='#ot_table_modal'
+                    >
+                    Edit
+                    </a>";
+                    // add delete in tk
+                    $btn .= " <button 
+                    class='btn btn-sm btn-danger'
+                    onclick='delete_ot(" . $row->id . ", \"" . $type . "\")'
+                    >
+                    Delete
+                    </button>";
+                }
+                
+              
+
+                
+            }
+          
+            return $btn;
+        })
+        ->rawColumns(['action', 'dates'])
+        ->make(true);
+
+
+    }
+
+    public function update_ot_rate(Request $request){
+        DB::beginTransaction();
+        try {
+                DB::connection("intra_payroll")->table("lib_ot_table")
+                ->where('id', $request->id)
+                ->update([
+                    "rate" => $request->rate
+                ]);
+            
+                DB::commit();
+            return json_encode("Success");
+        } catch (\Throwable $th) {
+            DB::rollback();
+            return json_encode($th->getMessage());
+
+        }
+
+    }
+
+    public function get_daily_sched_info(Request $request){
+        $lib_schedule = DB::connection("intra_payroll")->table("lib_schedule")
+            ->where("id", $request->id)
+            ->first();
+
+            if($lib_schedule != null){
+                $return = array(
+                    "is_flexi" => $lib_schedule->is_flexi,
+                    "required_hours" => $lib_schedule->required_hours,
+                    
+                    "am_in" => date("h:i A", strtotime($lib_schedule->am_in)),
+                    "am_out" => date("h:i A", strtotime($lib_schedule->am_out)),
+                    "pm_in" => date("h:i A", strtotime($lib_schedule->pm_in)),
+                    "pm_out" => date("h:i A", strtotime($lib_schedule->pm_out)),
+                    "ot_in" => date("h:i A", strtotime($lib_schedule->ot_in)),
+                    "ot_out" => date("h:i A", strtotime($lib_schedule->ot_out)),
+                    "grace_period" => $lib_schedule->grace_period
+                );
+            }else{
+                $return = array(
+                    "is_flexi" => "0",
+                    "required_hours" => "-",
+                    "am_in" => "-",
+                    "am_out" => "-",
+                    "pm_in" => "-",
+                    "pm_out" => "-",
+                    "ot_in" => "-",
+                    "ot_out" => "-",
+                    "grace_period" => "-",
+                );
+            }
+            
+            return json_encode($return);
+
+    }
+
+    public function delete_daily_sched(Request $request){
+        $target_day = date("Y-m-d", strtotime($request->target_day));
+    
+        DB::beginTransaction();
+        try {
+            DB::connection("intra_payroll")->table("tbl_daily_schedule")
+                ->where("emp_id", $request->emp_id)
+                ->where("schedule_date", $target_day)
+                ->delete();
+
+            DB::commit();
+            return json_encode($target_day);
+        } catch (\Throwable $th) {
+            DB::rollback();
+
+            return json_encode($th->getMessage());
+        }
+
+
+    }
+
+    public function set_daily_sched(Request $request){
+            $target_day = date("Y-m-d", strtotime($request->target_day));
+    
+        DB::beginTransaction();
+        try {
+            DB::connection("intra_payroll")->table("tbl_daily_schedule")
+                ->where("emp_id", $request->emp_id)
+                ->where("schedule_date", $target_day)
+                ->delete();
+
+                DB::connection("intra_payroll")->table("tbl_daily_schedule")
+                    ->insert([
+                        "emp_id" => $request->emp_id,
+                        "schedule_date" => $target_day,
+                        "schedule_id" => $request->by_emp_lib_schedule,
+                        "date_created" => date("Y-m-d H:i:s"),
+                        "user_id" => Auth::user()->id
+                    ]);
+
+
+            DB::commit();
+            return json_encode($target_day);
+        } catch (\Throwable $th) {
+            DB::rollback();
+
+            return json_encode($th->getMessage());
+        }
+
+    }
+
+    public function get_emp_default_schedule(Request $request){
+        $tbl_employee = DB::connection("intra_payroll")->table("tbl_employee")
+            ->where("id", $request->emp_id)
+            ->value("schedule_id");
+
+            if($tbl_employee != null){
+                return json_encode($tbl_employee);
+            }else{
+                return json_encode("0");
+            }
+    }
+
+
+
+
+
+    
+    public function get_temp_log(Request $request){
+        date_default_timezone_set('Asia/Manila');
+        // dd($request->all());
+        $biometric_id = "";
+      
+        $bio_id = DB::connection("intra_payroll")->table("tbl_employee")
+            ->where("id", $request->punch_emp) 
+            ->first();
+            if($bio_id != null){
+                $biometric_id = $bio_id->bio_id;
+            }
+        if($biometric_id == "" || $biometric_id == null){
+            return json_encode("No Biometric ID");
+        }
+
+     
+        
+        // $get_current_schedule = DB::connection("intra_payroll")->table("tbl_employee")
+
+        //GET SCHEDULE OF EMPLOYEE BASE ON GETTING DATA
+        $schedule = $this->get_schedule_by_day($bio_id->id, date("Y-m-d"));
+       
+        if($schedule == "false"){
+            return json_encode("No Biometric ID");
+        }
+
+        if($schedule["is_flexi"] == 1){
+            $required_hours = $schedule["required_hours"];
+            $log_data = array();
+            $log_data["required_hours"] = $required_hours;
+
+            $logs = DB::connection("intra_payroll")->table("tbl_raw_logs")
+                ->where("biometric_id", $biometric_id)
+                ->where("logs", "LIKE", date("Y-m-d")."%")
+                ->where("state", "LIKE", "FLEX_%")
+                ->orderBy("logs", "ASC")
+                ->get();
+
+            $last_state = "";
+            $cur_log = "";
+            $total_consume = 0;
+            foreach($logs as $log){
+                if($cur_log == ""){
+                  
+                    if($log->state == "FLEX_IN"){
+                        $cur_log = $log->logs;
+                        $last_state = $log->state;
+                    }
+
+                }else{
+
+                    if($log->state == "FLEX_OUT"){
+                        if(strtotime($log->logs)>strtotime($cur_log) ){
+
+                            
+                            $time_consume = strtotime($cur_log)- strtotime($log->logs);
+                            //CHECK COMPUTATION
+                            $total_consume += round(abs($time_consume) / 60,2);
+                            $cur_log = $log->logs;
+                            $last_state = $log->state;
+                        }
+                    }else{
+                        $cur_log = $log->logs;
+                        $last_state = $log->state;
+                    }
+
+                   
+
+                }
+
+                
+            }
+
+        
+
+            $log_data["flex_state"] = $last_state;
+            $log_data["consumed"] = number_format($total_consume / 60, 2);
+
+
+        }else{
+
+            $logs = DB::connection("intra_payroll")->table("tbl_raw_logs")
+            ->where("biometric_id", $biometric_id)
+            ->where("logs", "LIKE", date("Y-m-d")."%")
+            ->where("state", "NOT LIKE", "FLEX_%")
+            ->groupBy("state")
+            ->get();
+
+            $log_data = array();
+            $log_data["AM_IN"] = "";
+            $log_data["AM_OUT"] = "";
+            $log_data["PM_IN"] = "";
+            $log_data["PM_OUT"] = "";
+            $log_data["OT_IN"] = "";
+            $log_data["OT_OUT"] = "";
+            
+            foreach($logs as $log){
+                if($log->state == "AM_IN"){  $log_data["AM_IN"] = $log->logs;}
+                if($log->state == "AM_OUT"){ $log_data["AM_OUT"] = $log->logs;}
+                if($log->state == "PM_IN"){  $log_data["PM_IN"] = $log->logs;}
+                if($log->state == "PM_OUT"){ $log_data["PM_OUT"] = $log->logs;}
+                if($log->state == "OT_IN"){  $log_data["OT_IN"] = $log->logs;}
+                if($log->state == "OT_OUT"){ $log_data["OT_OUT"] = $log->logs;}
+                
+            }
+
+        }
+      
+
+         
+
+
+        $log_data["flexi"] = $schedule["is_flexi"];
+
+        
+
+
+
+        return json_encode($log_data);
+    }
+
+
+    public function punch_in_out_ins(Request $request){
+        date_default_timezone_set('Asia/Manila');
+        // dd($request->all());
+        $biometric_id = "";
+        $bio_id = DB::connection("intra_payroll")->table("tbl_employee")
+            ->where("id", $request->emp_id) 
+            ->first();
+            if($bio_id != null){
+                $biometric_id = $bio_id->bio_id;
+            }
+
+            if($biometric_id == "" || $biometric_id == null){
+                return json_encode("No Biometric ID");
+            }
+            
+            DB::beginTransaction();
+
+            try {
+                
+                DB::connection("intra_payroll")->table("tbl_raw_logs")
+                    ->insert([
+                        "biometric_id" => $biometric_id,
+                        "state" => $request->state,
+                        "logs" => date("Y-m-d H:i:s")
+                    ]);
+
+                DB::commit();
+                return json_encode("Success " . $request->state);
+            } catch (\Throwable $th) {
+                //throw $th;
+                DB::rollback();
+                return json_encode($th->getMessage());
+            }
+
+        
+
+
+
+
+
+    }
+
+    public function get_punch_in_out_emp(Request $request){
+        
+        if(Auth::user()->access[$request->page]["user_type"] != "Admin"){
+            $emp_data = DB::connection("intra_payroll")->table("tbl_employee")
+                ->where("id", Auth::user()->company["linked_employee"]["id"])
+                ->get();
+        }else{
+            $emp_data = DB::connection("intra_payroll")->table("tbl_employee")
+            ->where('is_active',1)
+            ->get();
+        }
+
+        return json_encode($emp_data);
+
+
+    }
+
+
+    public function applied_ot_tbl(Request $request){
+
+        $employee = json_decode(json_encode(
+            DB::connection("intra_payroll")->table("tbl_employee")
+                ->get()
+        ), true);
+
+      
+     
+
+        $page_permission = Auth::user()->access[$request->page]["access"];
+
+        $ot_type_array = array(
+            "ROT" => "Regular OT",
+            "SOT" => "Special OT"
+        );
+
+    
+
+            if(Auth::user()->access[$request->page]["user_type"] != "employee"){
+                $list = DB::connection("intra_payroll")->table("tbl_ot_applied")
+                ->orderBy("date_target","DESC")
+                ->get();
+    
+            }else{
+            
+                $list = DB::connection("intra_payroll")->table("tbl_ot_applied")
+                ->where("emp_id", Auth::user()->company["linked_employee"]["id"])
+                ->orderBy("date_target","DESC")
+                ->get();
+    
+            }
+    
+
+
+            $data = collect($list);
+
+            return Datatables::of($data)
+            ->addColumn('name', function($row) use ($employee){
+                $data_emp = $this->search_multi_array($employee, "id", $row->emp_id);
+                if(count($data_emp)>0){
+                    return $data_emp["last_name"].", ".$data_emp["first_name"]." ".$data_emp["middle_name"]." ".$data_emp["ext_name"];
+                }else{
+                    return "";
+                }
+
+                
+
+
+            })
+            ->addColumn('ot_type', function($row) use ($ot_type_array) {
+                return $ot_type_array[$row->ot_type];
+            })
+            ->addColumn('ot_date', function($row){
+                return $row->date_target;
+            })
+            ->addColumn('ot_time', function($row){
+                $ot_time = "";
+                $ot_time .= "<label class='btn btn-info btn-sm w-100'>FROM: ".date("H:i A", strtotime($row->time_from));
+                $ot_time .= "</label><br>";
+                $ot_time .= "<label class='btn btn-info btn-sm w-100'>TO: ".date("H:i A", strtotime($row->time_to));
+                $ot_time .= "</label>";
+                return $ot_time;
+            })
+            ->addColumn('ot_status', function($row){
+                return $row->status;
+            })
+            ->addColumn('action', function($row) use ($page_permission, $request){
+                $btn = "";
+                if(preg_match("/U/i", $page_permission)){
+                    if(Auth::user()->access[$request->page]["user_type"] != "employee"){
+                        $type = "ot_request";
+                        $btn .= "<a 
+                        class='btn btn-sm btn-success mr-1'
+                        data-toggle='modal' 
+                        data-target='#ot_apply_modal'
+                        data-id = '".$row->id."'
+                        data-emp_id = '".$row->emp_id."'
+                        data-ot_type = '".$row->ot_type."'
+                        data-ot_date = '".$row->date_target."'                        
+                        data-ot_from = '".date("H:i", strtotime($row->time_from))."'                        
+                        data-ot_to = '".date("H:i", strtotime($row->time_to))."'              
+                        data-reason ='".$row->reason."'
+                        data-ot_status = '".$row->status."'
+                        >
+                        Edit
+                        </a>";
+
+                        // add delete in tk
+                        $btn .= " <button 
+                        class='btn btn-sm btn-danger'
+                        onclick='delete_ot(" . $row->id . ", \"" . $type . "\")'
+                        >
+                        Delete
+                        </button>";
+                    }
+                    
+                  
+    
+                    
+                }
+              
+                return $btn;
+            })
+            ->rawColumns(['action', 'ot_time'])
+            ->make(true);
+
+
+    }
+
+    public function apply_ot(Request $request){
+        DB::beginTransaction();
+        try {
+            $from = strtotime($request->ot_from);
+            $to = strtotime($request->ot_to);
+            $ot_from = date("H:i:s", $from);
+            $ot_to = date("H:i:s", $to);
+            if($to < $from){
+                $ot_from = date("Y-m-d H:i:s", strtotime($request->ot_date." ".$ot_from));
+                $ot_to = date("Y-m-d H:i:s", strtotime($request->ot_date." ".$ot_to." +1 day"));
+            }else{
+                $ot_from = date("Y-m-d H:i:s", strtotime($request->ot_date." ".$ot_from));
+                $ot_to = date("Y-m-d H:i:s", strtotime($request->ot_date." ".$ot_to));
+            }
+
+            if($request->ot_status == "APPROVED" || $request->ot_status == "REJECTED"){
+                $user_approved = Auth::user()->id;
+            }else{
+                $user_approved = "0";
+            }
+
+            $check_ot = DB::connection("intra_payroll")->table("tbl_ot_applied")
+            ->where("id", $request->ot_id)
+            ->first();
+            if($check_ot != null){
+                //UPDATE
+                DB::connection("intra_payroll")->table("tbl_ot_applied")
+                    ->where("id", $check_ot->id)
+                    ->update([
+                        "emp_id" => $request->ot_emp_name,
+                        "ot_type" => $request->ot_type,
+                        "date_target" => $request->ot_date,
+                        "time_from" => $ot_from,
+                        "time_to" => $ot_to,
+                        "status" => $request->ot_status,
+                        "reason" => $request->ot_reason,
+                        "user_approved" => $user_approved,
+                        "user_id" => Auth::user()->id
+                    ]);
+            }else{
+                DB::connection("intra_payroll")->table("tbl_ot_applied")
+                ->insert([
+                    "emp_id" => $request->ot_emp_name,
+                    "ot_type" => $request->ot_type,
+                    "date_target" => $request->ot_date,
+                    "time_from" => $ot_from,
+                    "time_to" => $ot_to,
+                    "status" => $request->ot_status,
+                    "reason" => $request->ot_reason,
+                    "user_approved" => $user_approved,
+                    "date_created" => date("Y-m-d H:i:s"),
+                    "user_id" => Auth::user()->id
+                ]);
+
+
+
+            }
+
+            DB::commit();
+            return json_encode("Success");
+        } catch (\Throwable $th) {
+            DB::rollback();
+            return json_encode($th->getMessage());
+
+        }
+
+   
+
+
+    }
+
+
+    public function update_emp_def_schedule(Request $request){
+        
+
+        DB::beginTransaction();
+                
+        try {
+            $tbl_employee = DB::connection("intra_payroll")->table("tbl_employee")
+                ->where("id", $request->emp_id)
+                ->update([
+                    "schedule_id" => $request->emp_def_sched
+                ]);
+            DB::commit();
+            return json_encode("Set Schedule Success");
+        } catch (\Throwable $th) {
+            DB::rollback();
+
+            return json_encode($th->getMessage());
+        }
+
+    }
+
+    private function get_schedule_by_day($emp_id, $target_day){
+        // default by daily_sched , employee, position, designation, department, branch, company
+        // return json_encode($request->month_view);
+
+        $target_date = date("Y-m-d", strtotime($target_day));
+
+        $daily_sched = DB::connection("intra_payroll")->table("tbl_daily_schedule")->where("emp_id", $emp_id)->where("schedule_date", $target_date)->first();
+        $daily_sched = json_decode(json_encode($daily_sched), true);
+        
+        $tbl_timecard = DB::connection("intra_payroll")->table("tbl_timecard")->where("emp_id", $emp_id)->where("target_date", $target_date)->first();
+        $tbl_timecard = json_decode(json_encode($tbl_timecard), true);
+
+        $tbl_employee = DB::connection("intra_payroll")->table("tbl_employee")->where("id", $emp_id)->first();
+            $lib_position = DB::connection("intra_payroll")->table("lib_position")->where("id", $tbl_employee->position_id)->first();
+            $lib_designation = DB::connection("intra_payroll")->table("lib_designation")->where("id", $tbl_employee->designation)->first();
+            $tbl_department = DB::connection("intra_payroll")->table("tbl_department")->where("id", $tbl_employee->department)->first();
+            $tbl_branch = DB::connection("intra_payroll")->table("tbl_branch")->where("id", $tbl_employee->branch_id)->first();
+
+        $lib_schedule = DB::connection("intra_payroll")->table("lib_schedule")->where('is_active', 1)->get();
+        $lib_schedule = json_decode(json_encode($lib_schedule),true);
+        $lib_week_schedule = DB::connection("intra_payroll")->table("lib_week_schedule")->where('is_active', 1)->get();
+        $lib_week_schedule = json_decode(json_encode($lib_week_schedule),true);
+
+        if($daily_sched != null){
+            $lib_sched = $this->search_multi_array($lib_schedule, "id", $data["schedule_id"]);
+            if(isset($lib_sched["id"])){
+                return $lib_sched;   
+            }
+        }
+
+        if($tbl_employee->schedule_id !=0){
+            $day_name = date('l', strtotime($target_date));
+            $day_name = strtolower($day_name);
+
+            $sched_id = $tbl_employee->schedule_id;
+            $lib_week_sched = $this->search_multi_array($lib_week_schedule, "id", $sched_id);
+            if(isset($lib_week_sched)){
+                    $lib_sched = $this->search_multi_array($lib_schedule, "id", $lib_week_sched[$day_name]);
+                    if(isset($lib_sched["id"])){
+                        return $lib_sched;   
+                    }
+            }
+        }
+        
+        if($lib_position->schedule_id != 0){
+            $day_name = date('l', strtotime($target_date));
+            $day_name = strtolower($day_name);
+
+            $sched_id = $lib_position->schedule_id;
+            $lib_week_sched = $this->search_multi_array($lib_week_schedule, "id", $sched_id);
+            if(isset($lib_week_sched)){
+                    $lib_sched = $this->search_multi_array($lib_schedule, "id", $lib_week_sched[$day_name]);
+                    if(isset($lib_sched["id"])){
+                        return $lib_sched;   
+                    }
+            }
+        }
+
+        if($lib_designation->schedule_id != 0){
+            $day_name = date('l', strtotime($target_date));
+            $day_name = strtolower($day_name);
+
+            $sched_id = $lib_designation->schedule_id;
+            $lib_week_sched = $this->search_multi_array($lib_week_schedule, "id", $sched_id);
+            if(isset($lib_week_sched)){
+                    $lib_sched = $this->search_multi_array($lib_schedule, "id", $lib_week_sched[$day_name]);
+                    if(isset($lib_sched["id"])){
+                        return $lib_sched;   
+                    }
+            }
+        }
+
+        if($tbl_department->schedule_id != 0){
+            $day_name = date('l', strtotime($target_date));
+            $day_name = strtolower($day_name);
+
+            $sched_id = $tbl_department->schedule_id;
+            $lib_week_sched = $this->search_multi_array($lib_week_schedule, "id", $sched_id);
+            if(isset($lib_week_sched)){
+                    $lib_sched = $this->search_multi_array($lib_schedule, "id", $lib_week_sched[$day_name]);
+                    if(isset($lib_sched["id"])){
+                        return $lib_sched;   
+                    }
+            }
+        }
+
+        if($tbl_branch->schedule_id != 0){
+            $day_name = date('l', strtotime($target_date));
+            $day_name = strtolower($day_name);
+
+            $sched_id = $tbl_branch->schedule_id;
+            $lib_week_sched = $this->search_multi_array($lib_week_schedule, "id", $sched_id);
+            if(isset($lib_week_sched)){
+                    $lib_sched = $this->search_multi_array($lib_schedule, "id", $lib_week_sched[$day_name]);
+                    if(isset($lib_sched["id"])){
+                        return $lib_sched;   
+                    }
+            }
+        }
+
+        if(Auth::user()->company["default_work_settings"] != 0){
+            $day_name = date('l', strtotime($target_date));
+            $day_name = strtolower($day_name);
+
+            $sched_id = Auth::user()->company["default_work_settings"];
+            $lib_week_sched = $this->search_multi_array($lib_week_schedule, "id", $sched_id);
+            if(isset($lib_week_sched)){
+                    $lib_sched = $this->search_multi_array($lib_schedule, "id", $lib_week_sched[$day_name]);
+                    if(isset($lib_sched["id"])){
+                        return $lib_sched;   
+                    }
+            }
+        }
+
+        return "false";
+    }
+
+
+
+    public function sched_by(Request $request){
+        $page_permission = Auth::user()->access[$request->page]["access"];
+        $schedule_list = DB::connection("intra_payroll")->table("lib_week_schedule")
+            ->where("is_active", 1)
+            ->get();
+    
+
+        if($request->sched_by == "sched_by_position"){
+            $tbl_data = DB::connection("intra_payroll")->table("lib_position")
+                ->where("is_active", 1)
+                ->get();
+        }
+        elseif($request->sched_by == "sched_by_department"){
+            $tbl_data = DB::connection("intra_payroll")->table("tbl_department")
+                ->select("department as name", "schedule_id", "id")
+                ->where("is_active", 1)
+                ->get();
+        }
+        elseif($request->sched_by == "sched_by_branch"){
+            $tbl_data = DB::connection("intra_payroll")->table("tbl_branch")
+                ->select("branch as name", "schedule_id", "id")
+                ->where("is_active", 1)
+                ->get();
+        }
+        elseif($request->sched_by == "sched_by_designation"){
+            $tbl_data = DB::connection("intra_payroll")->table("lib_designation")
+             
+                ->where("is_active", 1)
+                ->get();
+        }
+
+
+        else{
+            $tbl_data = array();
+        }        
+
+
+        $tbl_data = collect($tbl_data);
+
+          return Datatables::of($tbl_data)
+          ->addColumn('schedule', function($row) use ($page_permission, $request, $schedule_list){
+            $btn = "";
+            if(preg_match("/U/i", $page_permission)){
+                if(Auth::user()->access[$request->page]["user_type"] != "employee"){
+                    $btn .= "<select id='schedule_".$request->sched_by."_".$row->id."' onchange='change_sched(".$row->id.", this.value, ".'"'.$request->sched_by.'"'.")' class='form-control form-select'>";
+                        $btn .= "<option value='0'>Select Schedule </option>";
+                        foreach($schedule_list as $sched)
+                        {
+                            if($sched->id == $row->schedule_id){
+                                $btn .= "<option value='".$sched->id."' selected>(".$sched->code.") ".$sched->name."</option>";
+                            }else{
+                                $btn .= "<option value='".$sched->id."'>(".$sched->code.") ".$sched->name."</option>";
+                            }
+
+                        }
+                    $btn .= "</select>";
+                }
+            }
+          
+            return $btn;
+            })
+            ->rawColumns(['schedule'])
+            ->make(true);
+
+    }
+
+    function update_schedule_by(Request $request){
+        
+        if($request->sched_by == "sched_by_position"){
+            $tbl_data = "lib_position";
+        }
+        elseif($request->sched_by == "sched_by_department"){
+            $tbl_data = "tbl_department";
+        }
+        elseif($request->sched_by == "sched_by_branch"){
+            $tbl_data = "tbl_branch";
+        }
+        elseif($request->sched_by == "sched_by_designation"){
+            $tbl_data = "lib_designation";
+        }else{
+            return json_encode("Sub Menu Undefined");
+        }
+       
+
+        DB::beginTransaction();
+        try {
+            DB::connection("intra_payroll")->table($tbl_data)
+            ->where("id", $request->id)
+            ->update([
+                "schedule_id"=> $request->sched_id
+            ]);
+                DB::commit();
+            return json_encode("true");
+        } catch (\Throwable $th) {
+            DB::rollback();
+            return json_encode($th->getMessage());
+
+        }
+    }
+
+
+   
+
+    public function get_schedule(Request $request){
+        //hiearchy 
+        // default by daily_sched , employee, position, designation, department, branch, company
+        // return json_encode($request->month_view);
+        $date_from = $request->month_view;
+        $date_from_year = date("Y", strtotime($date_from));
+        $date_from_month = date("m", strtotime($date_from));
+        $date_from_day = date("d", strtotime($date_from));
+        if($date_from_day > 1){
+            $date_from = date("Y-m-01", strtotime($date_from . ' +1 month'));
+        }
+        // dd($date_from);
+
+        $date_to = date("Y-m-t", strtotime($date_from));
+        $data_days = array();
+        $cur_day = $date_from;
+
+        $daily_sched = DB::connection("intra_payroll")->table("tbl_daily_schedule")->where("emp_id", $request->emp_id)->whereBetween("schedule_date", [$date_from, $date_to])->get();
+        $daily_sched = json_decode(json_encode($daily_sched), true);
+        
+        $tbl_timecard = DB::connection("intra_payroll")->table("tbl_timecard")->where("emp_id", $request->emp_id)->whereBetween("target_date", [$date_from, $date_to])->get();
+        $tbl_timecard = json_decode(json_encode($tbl_timecard), true);
+
+        $lib_schedule = DB::connection("intra_payroll")->table("lib_schedule")->where('is_active', 1)->get();
+        $lib_schedule = json_decode(json_encode($lib_schedule),true);
+        $lib_week_schedule = DB::connection("intra_payroll")->table("lib_week_schedule")->where('is_active', 1)->get();
+        $lib_week_schedule = json_decode(json_encode($lib_week_schedule),true);
+
+        $leave_dates = array();
+
+        $tbl_leave_used = DB::connection("intra_payroll")->table("tbl_leave_used")->where("emp_id", $request->emp_id)->where("leave_status", "APPROVED")->where("leave_year",$date_from_year )->get();
+
+        foreach($tbl_leave_used as $leave_used){
+            $begin = new DateTime($leave_used->leave_date_from);
+            $leave_to_date = date("Y-m-d", strtotime($leave_used->leave_date_to .' +1 day'));
+            
+            $end = new DateTime($leave_to_date);
+
+            $interval = new DateInterval('P1D'); // 1 day interval
+            $daterange = new DatePeriod($begin, $interval ,$end);
+            foreach($daterange as $date_leave){
+                $leave_dates[$date_leave->format("Y-m-d")] = "LEAVE";
+            }
+
+        }
+
+    
+
+        $tbl_employee = DB::connection("intra_payroll")->table("tbl_employee")->where("id", $request->emp_id)->first();
+        $lib_position = DB::connection("intra_payroll")->table("lib_position")->where("id", $tbl_employee->position_id)->first();
+        $lib_designation = DB::connection("intra_payroll")->table("lib_designation")->where("id", $tbl_employee->designation)->first();
+        $tbl_department = DB::connection("intra_payroll")->table("tbl_department")->where("id", $tbl_employee->department)->first();
+        $tbl_branch = DB::connection("intra_payroll")->table("tbl_branch")->where("id", $tbl_employee->branch_id)->first();
+        
+        do{
+            if(count($daily_sched)>0){
+                $data = $this->search_multi_array($daily_sched, "schedule_date", $cur_day);
+                if(isset($data["schedule_id"])){
+                    $lib_sched = $this->search_multi_array($lib_schedule, "id", $data["schedule_id"]);
+                    if(isset($lib_sched["id"])){
+                        if($lib_sched["is_flexi"] == "1"){
+                            $title = "Flexible ".$lib_sched["required_hours"]." hrs";
+                        }else{
+                            $title = date("g:i A",strtotime($lib_sched["am_in"]))." - ".date("g:i A",strtotime($lib_sched["pm_out"]));
+                        }
+
+
+                        
+                        $color = "#57b385";
+                        $my_sched_id = $data["schedule_id"];
+                    }else{
+                        $title = "NO SCHEDULE";
+                        $color = "#ebaf38";
+                        $my_sched_id = 0;
+
+                    }
+
+                    $is_daily_assigned = 1;
+               
+                }else{
+                    $is_daily_assigned = 0;
+                    if($tbl_employee->schedule_id !=0){
+                        $day_name = date('l', strtotime($cur_day));
+                        $day_name = strtolower($day_name);
+
+                        $sched_id = $tbl_employee->schedule_id;
+                        $lib_week_sched = $this->search_multi_array($lib_week_schedule, "id", $sched_id);
+                            if(isset($lib_week_sched)){
+                                $lib_sched = $this->search_multi_array($lib_schedule, "id", $lib_week_sched[$day_name]);
+                                    if(isset($lib_sched["id"])){
+                                        if($lib_sched["is_flexi"] == "1"){
+                                            $title = "Flexible ".$lib_sched["required_hours"]." hrs";
+                                        }else{
+                                            $title = date("g:i A",strtotime($lib_sched["am_in"]))." - ".date("g:i A",strtotime($lib_sched["pm_out"]));
+                                        }
+                                        $color = "#53f563";
+                                        $my_sched_id = $lib_week_sched[$day_name];
+                                    }else{
+                                        $title = "NO SCHEDULE";
+                                        $color = "#ebaf38";
+                                        $my_sched_id = 0;
+                                    }
+                            }else{
+                                $title = "NO SCHEDULE";
+                                $color = "#ebaf38";
+                                $my_sched_id = 0;
+                            }
+                         
+
+                    }else{
+                        if($lib_position->schedule_id != 0){
+                            $day_name = date('l', strtotime($cur_day));
+                            $day_name = strtolower($day_name);
+    
+                            $sched_id = $lib_position->schedule_id;
+                            $lib_week_sched = $this->search_multi_array($lib_week_schedule, "id", $sched_id);
+                                if(isset($lib_week_sched)){
+                                    $lib_sched = $this->search_multi_array($lib_schedule, "id", $lib_week_sched[$day_name]);
+                                        if(isset($lib_sched["id"])){
+                                            if($lib_sched["is_flexi"] == "1"){
+                                                $title = "Flexible ".$lib_sched["required_hours"]." hrs";
+                                            }else{
+                                                $title = date("g:i A",strtotime($lib_sched["am_in"]))." - ".date("g:i A",strtotime($lib_sched["pm_out"]));
+                                            }
+                                            $color = "#53f563";
+                                            $my_sched_id = $lib_week_sched[$day_name];
+                                        }else{
+                                            $title = "NO SCHEDULE";
+                                            $color = "#ebaf38";
+                                            $my_sched_id = 0;
+                                        }
+                                }else{
+                                    $title = "NO SCHEDULE";
+                                    $color = "#ebaf38";
+                                    $my_sched_id = 0;
+                                }
+                          
+                        }else{
+                            if($lib_designation->schedule_id != 0){
+                                $day_name = date('l', strtotime($cur_day));
+                                $day_name = strtolower($day_name);
+        
+                                $sched_id = $lib_designation->schedule_id;
+                                $lib_week_sched = $this->search_multi_array($lib_week_schedule, "id", $sched_id);
+                                    if(isset($lib_week_sched)){
+                                        $lib_sched = $this->search_multi_array($lib_schedule, "id", $lib_week_sched[$day_name]);
+                                            if(isset($lib_sched["id"])){
+                                                if($lib_sched["is_flexi"] == "1"){
+                                                    $title = "Flexible ".$lib_sched["required_hours"]." hrs";
+                                                }else{
+                                                    $title = date("g:i A",strtotime($lib_sched["am_in"]))." - ".date("g:i A",strtotime($lib_sched["pm_out"]));
+                                                }
+                                                $color = "#53f563";
+                                                $my_sched_id = $lib_week_sched[$day_name];
+                                            }else{
+                                                $title = "NO SCHEDULE";
+                                                $color = "#ebaf38";
+                                                $my_sched_id = 0;
+                                            }
+                                    }else{
+                                        $title = "NO SCHEDULE";
+                                        $color = "#ebaf38";
+                                        $my_sched_id = 0;
+                                    }
+                                  
+                            }else{
+                                if($tbl_department->schedule_id != 0){
+                                    $day_name = date('l', strtotime($cur_day));
+                                    $day_name = strtolower($day_name);
+            
+                                    $sched_id = $tbl_department->schedule_id;
+                                    $lib_week_sched = $this->search_multi_array($lib_week_schedule, "id", $sched_id);
+                                        if(isset($lib_week_sched)){
+                                            $lib_sched = $this->search_multi_array($lib_schedule, "id", $lib_week_sched[$day_name]);
+                                                if(isset($lib_sched["id"])){
+                                                    if($lib_sched["is_flexi"] == "1"){
+                                                        $title = "Flexible ".$lib_sched["required_hours"]." hrs";
+                                                    }else{
+                                                        $title = date("g:i A",strtotime($lib_sched["am_in"]))." - ".date("g:i A",strtotime($lib_sched["pm_out"]));
+                                                    }
+                                                    $color = "#53f563";
+                                                    $my_sched_id = $lib_week_sched[$day_name];
+                                                }else{
+                                                    $title = "NO SCHEDULE";
+                                                    $color = "#ebaf38";
+                                                    $my_sched_id = 0;
+                                                }
+                                        }else{
+                                            $title = "NO SCHEDULE";
+                                            $color = "#ebaf38";
+                                            $my_sched_id = 0;
+                                        }
+                                }else{
+                                    if($tbl_branch->schedule_id != 0){
+                                        $day_name = date('l', strtotime($cur_day));
+                                        $day_name = strtolower($day_name);
+                
+                                        $sched_id = $tbl_branch->schedule_id;
+                                        $lib_week_sched = $this->search_multi_array($lib_week_schedule, "id", $sched_id);
+                                            if(isset($lib_week_sched)){
+                                                $lib_sched = $this->search_multi_array($lib_schedule, "id", $lib_week_sched[$day_name]);
+                                                    if(isset($lib_sched["id"])){
+                                                        if($lib_sched["is_flexi"] == "1"){
+                                                            $title = "Flexible ".$lib_sched["required_hours"]." hrs";
+                                                        }else{
+                                                            $title = date("g:i A",strtotime($lib_sched["am_in"]))." - ".date("g:i A",strtotime($lib_sched["pm_out"]));
+                                                        }
+                                                        $color = "#53f563";
+                                                        $my_sched_id = $lib_week_sched[$day_name];
+                                                    }else{
+                                                        $title = "NO SCHEDULE";
+                                                        $color = "#ebaf38";
+                                                        $my_sched_id = 0;
+                                                    }
+                                            }else{
+                                                $title = "NO SCHEDULE";
+                                                $color = "#ebaf38";
+                                                $my_sched_id = 0;
+                                            }
+                                    }else{
+                                        if(Auth::user()->company["default_work_settings"] != 0){
+                                            $day_name = date('l', strtotime($cur_day));
+                                            $day_name = strtolower($day_name);
+                    
+                                            $sched_id = Auth::user()->company["default_work_settings"];
+                                            $lib_week_sched = $this->search_multi_array($lib_week_schedule, "id", $sched_id);
+                                                if(isset($lib_week_sched)){
+                                                    $lib_sched = $this->search_multi_array($lib_schedule, "id", $lib_week_sched[$day_name]);
+                                                        if(isset($lib_sched["id"])){
+                                                            if($lib_sched["is_flexi"] == "1"){
+                                                                $title = "Flexible ".$lib_sched["required_hours"]." hrs";
+                                                            }else{
+                                                                $title = date("g:i A",strtotime($lib_sched["am_in"]))." - ".date("g:i A",strtotime($lib_sched["pm_out"]));
+                                                            }
+                                                            $color = "#53f563";
+                                                            $my_sched_id = $lib_week_sched[$day_name];
+                                                        }else{
+                                                            $title = "NO SCHEDULE";
+                                                            $color = "#ebaf38";
+                                                            $my_sched_id = 0;
+                                                        }
+                                                }else{
+                                                    $title = "NO SCHEDULE";
+                                                    $color = "#ebaf38";
+                                                    $my_sched_id = 0;
+                                                }
+                                                array_push($data_days,array(
+                                                    'title' => $title,
+                                                    'start' => $cur_day,
+                                                    'color' => $color,
+                                                    'extendedProps' => array( "dailyAssigned" => '0','sched_id' => $my_sched_id ) 
+                                                ));
+                                        }else{
+                                            $title = "NO SCHEDULE";
+                                            $color = "#ebaf38";
+                                            $my_sched_id = 0;
+                                         
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+
+                    
+                }
+
+                if(isset($leave_dates[$cur_day])){
+                    array_push($data_days,array(
+                        'title' => $leave_dates[$cur_day],
+                        'start' => $cur_day,
+                        'color'  => "#159ca1",
+                        
+                    ));
+                 
+                    
+                }else{
+                    array_push($data_days,array(
+                        'title' => $title,
+                        'start' => $cur_day,
+                        'color'  => $color,
+                        'extendedProps' => array(
+                            "dailyAssigned" => $is_daily_assigned,
+                            'sched_id' => $my_sched_id,
+                        )
+                    ));
+                }
+
+
+
+
+
+            }else{
+                $is_daily_assigned = 0;
+                if($tbl_employee->schedule_id !=0){
+                    $day_name = date('l', strtotime($cur_day));
+                    $day_name = strtolower($day_name);
+
+                    $sched_id = $tbl_employee->schedule_id;
+                    $lib_week_sched = $this->search_multi_array($lib_week_schedule, "id", $sched_id);
+                        if(isset($lib_week_sched)){
+                            $lib_sched = $this->search_multi_array($lib_schedule, "id", $lib_week_sched[$day_name]);
+                                if(isset($lib_sched["id"])){
+                                    if($lib_sched["is_flexi"] == "1"){
+                                        $title = "Flexible ".$lib_sched["required_hours"]." hrs";
+                                    }else{
+                                        $title = date("g:i A",strtotime($lib_sched["am_in"]))." - ".date("g:i A",strtotime($lib_sched["pm_out"]));
+                                    }
+                                    $color = "#53f563";
+                                    $my_sched_id = $lib_week_sched[$day_name];
+                                }else{
+                                    $title = "NO SCHEDULE";
+                                    $color = "#ebaf38";
+                                    $my_sched_id = 0;
+                                }
+                        }else{
+                            $title = "NO SCHEDULE";
+                            $color = "#ebaf38";
+                            $my_sched_id = 0;
+                        }
+                       
+
+                }else{
+                    if($lib_position->schedule_id != 0){
+                        $day_name = date('l', strtotime($cur_day));
+                        $day_name = strtolower($day_name);
+
+                        $sched_id = $lib_position->schedule_id;
+                        $lib_week_sched = $this->search_multi_array($lib_week_schedule, "id", $sched_id);
+                            if(isset($lib_week_sched)){
+                                $lib_sched = $this->search_multi_array($lib_schedule, "id", $lib_week_sched[$day_name]);
+                                    if(isset($lib_sched["id"])){
+                                        if($lib_sched["is_flexi"] == "1"){
+                                            $title = "Flexible ".$lib_sched["required_hours"]." hrs";
+                                        }else{
+                                            $title = date("g:i A",strtotime($lib_sched["am_in"]))." - ".date("g:i A",strtotime($lib_sched["pm_out"]));
+                                        }
+                                        $color = "#53f563";
+                                        $my_sched_id = $lib_week_sched[$day_name];
+                                    }else{
+                                        $title = "NO SCHEDULE";
+                                        $color = "#ebaf38";
+                                        $my_sched_id = 0;
+                                    }
+                            }else{
+                                $title = "NO SCHEDULE";
+                                $color = "#ebaf38";
+                                $my_sched_id = 0;
+                            }
+                           
+                    }else{
+                        if($lib_designation->schedule_id != 0){
+                            $day_name = date('l', strtotime($cur_day));
+                            $day_name = strtolower($day_name);
+    
+                            $sched_id = $lib_designation->schedule_id;
+                            $lib_week_sched = $this->search_multi_array($lib_week_schedule, "id", $sched_id);
+                                if(isset($lib_week_sched)){
+                                    $lib_sched = $this->search_multi_array($lib_schedule, "id", $lib_week_sched[$day_name]);
+                                        if(isset($lib_sched["id"])){
+                                            if($lib_sched["is_flexi"] == "1"){
+                                                $title = "Flexible ".$lib_sched["required_hours"]." hrs";
+                                            }else{
+                                                $title = date("g:i A",strtotime($lib_sched["am_in"]))." - ".date("g:i A",strtotime($lib_sched["pm_out"]));
+                                            }
+                                            $color = "#53f563";
+                                            $my_sched_id = $lib_week_sched[$day_name];
+                                        }else{
+                                            $title = "NO SCHEDULE";
+                                            $color = "#ebaf38";
+                                            $my_sched_id = 0;
+                                        }
+                                }else{
+                                    $title = "NO SCHEDULE";
+                                    $color = "#ebaf38";
+                                    $my_sched_id = 0;
+                                }
+                                
+                        }else{
+                            if($tbl_department->schedule_id != 0){
+                                $day_name = date('l', strtotime($cur_day));
+                                $day_name = strtolower($day_name);
+        
+                                $sched_id = $tbl_department->schedule_id;
+                                $lib_week_sched = $this->search_multi_array($lib_week_schedule, "id", $sched_id);
+                                    if(isset($lib_week_sched)){
+                                        $lib_sched = $this->search_multi_array($lib_schedule, "id", $lib_week_sched[$day_name]);
+                                            if(isset($lib_sched["id"])){
+                                                if($lib_sched["is_flexi"] == "1"){
+                                                    $title = "Flexible ".$lib_sched["required_hours"]." hrs";
+                                                }else{
+                                                    $title = date("g:i A",strtotime($lib_sched["am_in"]))." - ".date("g:i A",strtotime($lib_sched["pm_out"]));
+                                                }
+                                                $color = "#53f563";
+                                                $my_sched_id = $lib_week_sched[$day_name];
+                                            }else{
+                                                $title = "NO SCHEDULE";
+                                                $color = "#ebaf38";
+                                                $my_sched_id = 0;
+                                            }
+                                    }else{
+                                        $title = "NO SCHEDULE";
+                                        $color = "#ebaf38";
+                                        $my_sched_id = 0;
+                                    }
+                                  
+                            }else{
+                                if($tbl_branch->schedule_id != 0){
+                                    $day_name = date('l', strtotime($cur_day));
+                                    $day_name = strtolower($day_name);
+            
+                                    $sched_id = $tbl_branch->schedule_id;
+                                    $lib_week_sched = $this->search_multi_array($lib_week_schedule, "id", $sched_id);
+                                        if(isset($lib_week_sched)){
+                                            $lib_sched = $this->search_multi_array($lib_schedule, "id", $lib_week_sched[$day_name]);
+                                                if(isset($lib_sched["id"])){
+                                                    if($lib_sched["is_flexi"] == "1"){
+                                                        $title = "Flexible ".$lib_sched["required_hours"]." hrs";
+                                                    }else{
+                                                        $title = date("g:i A",strtotime($lib_sched["am_in"]))." - ".date("g:i A",strtotime($lib_sched["pm_out"]));
+                                                    }
+                                                    $color = "#53f563";
+                                                    $my_sched_id = $lib_week_sched[$day_name];
+                                                }else{
+                                                    $title = "NO SCHEDULE";
+                                                    $color = "#ebaf38";
+                                                    $my_sched_id = 0;
+                                                }
+                                        }else{
+                                            $title = "NO SCHEDULE";
+                                            $color = "#ebaf38";
+                                            $my_sched_id = 0;
+                                        }
+                                       
+                                }else{
+                                    if(Auth::user()->company["default_work_settings"] != 0){
+                                        $day_name = date('l', strtotime($cur_day));
+                                        $day_name = strtolower($day_name);
+                
+                                        $sched_id = Auth::user()->company["default_work_settings"];
+                                        $lib_week_sched = $this->search_multi_array($lib_week_schedule, "id", $sched_id);
+                                            if(isset($lib_week_sched)){
+                                                $lib_sched = $this->search_multi_array($lib_schedule, "id", $lib_week_sched[$day_name]);
+                                                    if(isset($lib_sched["id"])){
+                                                        if($lib_sched["is_flexi"] == "1"){
+                                                            $title = "Flexible ".$lib_sched["required_hours"]." hrs";
+                                                        }else{
+                                                            $title = date("g:i A",strtotime($lib_sched["am_in"]))." - ".date("g:i A",strtotime($lib_sched["pm_out"]));
+                                                        }
+                                                        $color = "#53f563";
+                                                        $my_sched_id = $lib_week_sched[$day_name];
+                                                    }else{
+                                                        $title = "NO SCHEDULE";
+                                                        $color = "#ebaf38";
+                                                        $my_sched_id = 0;
+                                                    }
+                                            }else{
+                                                $title = "NO SCHEDULE";
+                                                $color = "#ebaf38";
+                                                $my_sched_id = 0;
+                                            }
+                                            
+                                    }else{
+                                        $title = "NO SCHEDULE";
+                                        $color = "#ebaf38";
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+
+                if(isset($leave_dates[$cur_day])){
+                    array_push($data_days,array(
+                        'title' => $leave_dates[$cur_day],
+                        'start' => $cur_day,
+                        'color'  => "#159ca1",
+                        
+                    ));
+                 
+                    
+                }else{
+                    array_push($data_days,array(
+                        'title' => $title,
+                        'start' => $cur_day,
+                        'color'  => $color,
+                        'extendedProps' => array(
+                            "dailyAssigned" => $is_daily_assigned,
+                            'sched_id' => $my_sched_id,
+                        )
+                    ));
+                }
+
+
+                
+
+            }
+          
+
+            $data_timecard = $this->search_multi_array($tbl_timecard, "target_date", $cur_day);
+            if(isset($data_timecard)){
+                $state="AM_IN";
+                if($data_timecard[$state] != "" || $data_timecard[$state] != NULL){
+                    array_push($data_days,array(
+                        'title' => $state,
+                        'start' => $data_timecard[$state],
+                        'eventColor' => '#a893e6',
+                        "eventTextColor" => "#000000"
+                    ));
+                }
+
+                $state="AM_OUT";
+                if($data_timecard[$state] != "" || $data_timecard[$state] != NULL){
+                    array_push($data_days,array(
+                        'title' => $state,
+                        'start' => $data_timecard[$state],
+                        'eventColor' => '#a893e6',
+                        "eventTextColor" => "#000000"
+                    ));
+                }
+             
+                $state="PM_IN";
+                if($data_timecard[$state] != "" || $data_timecard[$state] != NULL){
+                    array_push($data_days,array(
+                        'title' => $state,
+                        'start' => $data_timecard[$state],
+                        'eventColor' => '#a893e6',
+                        "eventTextColor" => "#000000"
+                    ));
+                }
+                $state="PM_OUT";
+                if($data_timecard[$state] != "" || $data_timecard[$state] != NULL){
+                    array_push($data_days,array(
+                        'title' => $state,
+                        'start' => $data_timecard[$state],
+                        'eventColor' => '#a893e6',
+                        "eventTextColor" => "#000000"
+                    ));
+                }
+                $state="OT_IN";
+                if($data_timecard[$state] != "" || $data_timecard[$state] != NULL){
+                    array_push($data_days,array(
+                        'title' => $state,
+                        'start' => $data_timecard[$state],
+                        'eventColor' => '#a893e6',
+                        "eventTextColor" => "#000000"
+                    ));
+                }
+                $state="OT_OUT";
+                if($data_timecard[$state] != "" || $data_timecard[$state] != NULL){
+                    array_push($data_days,array(
+                        'title' => $state,
+                        'start' => $data_timecard[$state],
+                        'eventColor' => '#a893e6',
+                        "eventTextColor" => "#000000"
+                    ));
+                }
+            }
+
+        
+
+
+
+            $cur_day = date('Y-m-d', strtotime($cur_day . ' +1 day'));
+
+        }while(strtotime($cur_day) <= strtotime($date_to));
+    
+        return response()->json($data_days);
+    }
+    // add delete in tk
+    public function delete_ot(Request $request){
+        $type = $request->type;
+        $tbl = "";
+        if($type == "ot_request"){
+            $tbl = "tbl_ot_applied";
+        }else{
+            $tbl = "lib_ot_table";
+        }
+        DB::beginTransaction();
+            try {
+                DB::connection("intra_payroll")->table($tbl)
+                    ->where("id", $request->id)
+                    ->delete();
+                DB::commit();
+                return json_encode("Deleted");
+            } catch (\Throwable $th) {
+                DB::rollback();
+                return json_encode($th->getMessage());
+            }
+
+    }
+
+    // add export btn
+    public function exportLogs($emp_id = 0, Request $request)
+    {
+        $emp = DB::connection("intra_payroll")->table("tbl_employee")
+            ->where("id", $emp_id)
+            ->first();
+    
+        if ($emp != null) {
+            $bio_id = $emp->bio_id;
+        } else {
+            $bio_id = "0"; // For all employees
+        }
+    
+        $logs = DB::connection("intra_payroll")->table("tbl_raw_logs")
+            ->where("biometric_id", $bio_id);
+    
+        // Filter by date range
+        if ($request->filled('date_range')) {
+            [$start_date, $end_date] = explode(' - ', $request->date_range);
+            $logs->whereBetween('logs', [$start_date . ' 00:00:00', $end_date . ' 23:59:59']);
+        }
+    
+        $logs = $logs->orderBy("logs", "DESC")->get();
+    
+        // Group logs by date
+        $groupedLogs = [];
+        foreach ($logs as $log) {
+            $date = date('Y-m-d', strtotime($log->logs));
+            $state = $log->state;
+    
+            if (!isset($groupedLogs[$date])) {
+                $groupedLogs[$date] = [
+                    'time_in' => [],
+                    'time_out' => [],
+                    'employee_name' => DB::connection("intra_payroll")->table('tbl_employee')->where('bio_id', $log->biometric_id)->first()->first_name . ' ' . DB::connection("intra_payroll")->table('tbl_employee')->where('bio_id', $log->biometric_id)->first()->last_name,
+                ];
+            }
+
+            $log_time = date('H:i:s', strtotime($log->logs));
+    
+            if ($state == 'AM_IN' || $state == 'PM_IN' || $state == 'OT_IN') {
+                $groupedLogs[$date]['time_in'][] = $log_time;
+            } elseif ($state == 'AM_OUT' || $state == 'PM_OUT' || $state == 'OT_OUT') {
+                $groupedLogs[$date]['time_out'][] = $log_time;
+            }
+        }
+        $finalLogs = [];
+        foreach ($groupedLogs as $date => $times) {
+            $finalLogs[] = [
+                'employee_name' => $times['employee_name'],
+                'date' => $date,
+                'time_in' => implode(', ', $times['time_in']),
+                'time_out' => implode(', ', $times['time_out']),
+            ];
+        }
+        return Excel::download(new LogsExport(collect($finalLogs)), 'logs_export_' . time() . '.xlsx');
+    }
+
+    public function exportAllEmployees(Request $request)
+    {
+        $logs = DB::connection("intra_payroll")->table("tbl_raw_logs");
+
+        // Filter by date range
+        if ($request->filled('date_range')) {
+            [$start_date, $end_date] = explode(' - ', $request->date_range);
+            $logs->whereBetween('logs', [$start_date . ' 00:00:00', $end_date . ' 23:59:59']);
+        }
+
+        $logs = $logs->orderBy("logs", "DESC")->get();
+
+        // Group logs by employee and date
+        $groupedLogs = [];
+        foreach ($logs as $log) {
+            $employee = DB::connection("intra_payroll")->table('tbl_employee')
+                ->where('bio_id', $log->biometric_id)
+                ->first();
+
+            $employee_name = $employee ? "{$employee->first_name} {$employee->last_name}" : "Unknown Employee";
+            $date = date('Y-m-d', strtotime($log->logs));
+            $state = $log->state;
+            $log_time = date('H:i:s', strtotime($log->logs));
+
+            if (!isset($groupedLogs[$employee_name][$date])) {
+                $groupedLogs[$employee_name][$date] = ['time_in' => [], 'time_out' => []];
+            }
+
+            if (in_array($state, ['AM_IN', 'PM_IN', 'OT_IN'])) {
+                $groupedLogs[$employee_name][$date]['time_in'][] = $log_time;
+            } elseif (in_array($state, ['AM_OUT', 'PM_OUT', 'OT_OUT'])) {
+                $groupedLogs[$employee_name][$date]['time_out'][] = $log_time;
+            }
+        }
+
+        $finalLogs = [];
+        foreach ($groupedLogs as $employee_name => $dates) {
+            foreach ($dates as $date => $times) {
+                if($employee_name != 'Unknown Employee'){
+                    $finalLogs[] = [
+                        'employee_name' => $employee_name,
+                        'date' => $date,
+                        'time_in' => implode(', ', $times['time_in']),
+                        'time_out' => implode(', ', $times['time_out']),
+                    ];
+                }
+            }
+        }
+
+        return Excel::download(new LogsExport(collect($finalLogs)), 'all_employees_logs_' . time() . '.xlsx');
+    }
+
+    //add export in file OT
+    public function export_ot_apply(Request $request)
+    {
+        $otApplications = DB::connection("intra_payroll")->table("tbl_ot_applied")
+        ->join("tbl_employee", "tbl_ot_applied.emp_id", "tbl_employee.id")
+        ->select(
+            "tbl_employee.last_name",
+            "tbl_employee.first_name",
+            "tbl_employee.middle_name",
+            "tbl_employee.ext_name",
+            "tbl_ot_applied.*"
+        )
+        ->orderBy("tbl_ot_applied.date_target", "DESC")
+        ->get();
+
+        // Format Data for Export
+        $OTAppliedData = [];
+        foreach ($otApplications as $row) {
+            $OTAppliedData[] = [
+                'employee_name' => $row->last_name . ', ' . $row->first_name . ' ' . $row->middle_name . ' ' . $row->ext_name,
+                'ot_type' => ($row->ot_type == "ROT") ? "Regular OT" : "Special OT",
+                'date_target' => $row->date_target,
+                'time_from' => $row->time_from,
+                'time_to' => $row->time_to,
+                'status' => $row->status,
+            ];
+        }
+
+        return Excel::download(new OTApplyExport(collect($OTAppliedData)), 'OT_Applications_' . time() . '.xlsx');
+    }
+
+}

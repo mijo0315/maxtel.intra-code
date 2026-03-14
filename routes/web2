@@ -1,0 +1,272 @@
+<?php
+namespace App\Http\Controllers;
+use App\Http\Controllers\Auth\ForgotPasswordController; // forgot password
+use Illuminate\Support\Facades\Route;
+use Auth;
+
+
+/*
+|--------------------------------------------------------------------------
+| Web Routes
+|--------------------------------------------------------------------------
+|
+| Here is where you can register web routes for your application. These
+| routes are loaded by the RouteServiceProvider within a group which
+| contains the "web" middleware group. Now create something great!
+|
+*/
+// forgot password
+Route::get('forget-password', [ForgotPasswordController::class, 'showForgetPasswordForm'])->name('forget.password.get');
+Route::post('forget-password-submit', [ForgotPasswordController::class, 'submitForgetPasswordForm'])->name('forget.password.submit'); 
+Route::get('password-reset/{token}', [ForgotPasswordController::class, 'showResetPasswordForm'])->name('reset.password.get');
+Route::post('password-reset', [ForgotPasswordController::class, 'submitResetPasswordForm'])->name('reset.password.submit');
+
+
+Route::get('dashboard', [dashboardController::class, 'dashboard'])->middleware(['auth'])->name('dashboard');
+    Route::post('branch_per_emp', [dashboardController::class, 'branch_per_emp'])->middleware(['auth'])->name('branch_per_emp');
+    Route::post('count_mwe', [dashboardController::class, 'count_mwe'])->middleware(['auth'])->name('count_mwe');
+
+
+    
+Route::get('report_management', [reportController::class, 'report_management'])->middleware(['auth'])->name('report_management');
+    Route::post('report_pay_list', [reportController::class, 'report_pay_list'])->middleware(['auth'])->name('report_pay_list');
+    Route::get('exportPayrollReport/{payid}', [reportController::class, 'exportPayrollReport'])->middleware(['auth'])->name('exportPayrollReport');
+    Route::get('exportStatutoryReport/{month_year}/{type}', [reportController::class, 'exportStatutoryReport'])->middleware(['auth'])->name('exportStatutoryReport');
+    Route::get('exportTimeKeeping/{from}/{to}', [reportController::class, 'exportTimeKeeping'])->middleware(['auth'])->name('exportTimeKeeping');
+    Route::get('exporEmpList/{from}/{to}', [reportController::class, 'exporEmpList'])->middleware(['auth'])->name('exporEmpList');
+    Route::get('exportRegIncome/{from}/{to}', [reportController::class, 'exportRegIncome'])->middleware(['auth'])->name('exportRegIncome');
+
+    Route::get('payroll_payslip/{pay_id}', [reportController::class, 'payroll_payslip'])->middleware(['auth'])->name('payroll_payslip');
+
+    
+    
+    
+
+
+Route::get('user_management', [userManagementController::class, 'user_management'])->middleware(['auth'])->name('user_management');
+    Route::post('load_user_list', [userManagementController::class, 'load_user_list'])->middleware(['auth'])->name('load_user_list');
+    Route::post('update_credential', [userManagementController::class, 'update_credential'])->middleware(['auth'])->name('update_credential');
+    Route::post('update_role', [userManagementController::class, 'update_role'])->middleware(['auth'])->name('update_role');
+    Route::post('user_get_employee', [userManagementController::class, 'user_get_employee'])->middleware(['auth'])->name('user_get_employee');
+    Route::post('update_link_emp', [userManagementController::class, 'update_link_emp'])->middleware(['auth'])->name('update_link_emp');
+    Route::post('create_user_management', [userManagementController::class, 'create_user_management'])->middleware(['auth'])->name('create_user_management');
+    // add delete in user
+    Route::post('delete_user', [userManagementController::class, 'delete_user'])->middleware(['auth'])->name('delete_user');
+    
+    
+Route::get('permission_management', [permissionManagementController::class, 'permission_management'])->middleware(['auth'])->name('permission_management');
+    Route::post('check_role_data', [permissionManagementController::class, 'check_role_data'])->middleware(['auth'])->name('check_role_data');
+    Route::post('load_page_access', [permissionManagementController::class, 'load_page_access'])->middleware(['auth'])->name('load_page_access');
+    Route::post('update_access_status', [permissionManagementController::class, 'update_access_status'])->middleware(['auth'])->name('update_access_status');
+    Route::post('submit_role_data', [permissionManagementController::class, 'submit_role_data'])->middleware(['auth'])->name('submit_role_data');
+
+    
+    
+Route::get('file_management', [fileManagementController::class, 'file_management'])->middleware(['auth'])->name('file_management');
+    Route::post('load_file_tbl', [fileManagementController::class, 'load_file_tbl'])->middleware(['auth'])->name('load_file_tbl');
+    Route::post('emp_upload_file', [fileManagementController::class, 'emp_upload_file'])->middleware(['auth'])->name('emp_upload_file');
+    Route::post('delete_emp_file', [fileManagementController::class, 'delete_emp_file'])->middleware(['auth'])->name('delete_emp_file');
+
+    
+
+Route::get('timekeeping_management', [timekeepingController::class, 'timekeeping_management'])->middleware(['auth'])->name('timekeeping_management');
+    Route::post('ot_table_tbl', [timekeepingController::class, 'ot_table_tbl'])->middleware(['auth'])->name('ot_table_tbl');
+    Route::post('update_ot_rate', [timekeepingController::class, 'update_ot_rate'])->middleware(['auth'])->name('update_ot_rate');
+    Route::post('sched_by', [timekeepingController::class, 'sched_by'])->middleware(['auth'])->name('sched_by');
+    Route::post('update_schedule_by', [timekeepingController::class, 'update_schedule_by'])->middleware(['auth'])->name('update_schedule_by');
+    Route::get('get_schedule/{emp_id}/{month_view}', [timekeepingController::class, 'get_schedule'])->middleware(['auth'])->name('get_schedule');
+    Route::post('get_emp_default_schedule', [timekeepingController::class, 'get_emp_default_schedule'])->middleware(['auth'])->name('get_emp_default_schedule');
+    Route::post('update_emp_def_schedule', [timekeepingController::class, 'update_emp_def_schedule'])->middleware(['auth'])->name('update_emp_def_schedule');
+    Route::post('get_daily_sched_info', [timekeepingController::class, 'get_daily_sched_info'])->middleware(['auth'])->name('get_daily_sched_info');
+    Route::post('set_daily_sched', [timekeepingController::class, 'set_daily_sched'])->middleware(['auth'])->name('set_daily_sched');
+    Route::post('delete_daily_sched', [timekeepingController::class, 'delete_daily_sched'])->middleware(['auth'])->name('delete_daily_sched');
+    Route::get('get_holiday/{month_view}/{page}', [timekeepingController::class, 'get_holiday'])->middleware(['auth'])->name('get_holiday');
+    Route::post('set_holiday', [timekeepingController::class, 'set_holiday'])->middleware(['auth'])->name('set_holiday');
+    
+    Route::post('get_employee_info', [timekeepingController::class, 'get_employee_info'])->middleware(['auth'])->name('get_employee_info');
+    Route::post('raw_logs_tbl', [timekeepingController::class, 'raw_logs_tbl'])->middleware(['auth'])->name('raw_logs_tbl');
+    Route::post('process_raw_logs', [timekeepingController::class, 'process_raw_logs'])->middleware(['auth'])->name('process_raw_logs');
+
+      Route::post('timecard_logs_tbl', [timekeepingController::class, 'timecard_logs_tbl'])->middleware(['auth'])->name('timecard_logs_tbl');
+
+    Route::post('manual_in_out', [timekeepingController::class, 'manual_in_out'])->middleware(['auth'])->name('manual_in_out');
+
+    
+
+    Route::post('apply_ot', [timekeepingController::class, 'apply_ot'])->middleware(['auth'])->name('apply_ot');
+    Route::post('applied_ot_tbl', [timekeepingController::class, 'applied_ot_tbl'])->middleware(['auth'])->name('applied_ot_tbl');
+    //add export in file OT
+    Route::get('export_ot_apply', [timekeepingController::class, 'export_ot_apply'])->middleware(['auth'])->name('export_ot_apply');
+    Route::post('get_punch_in_out_emp', [timekeepingController::class, 'get_punch_in_out_emp'])->middleware(['auth'])->name('get_punch_in_out_emp');
+    Route::post('punch_in_out_ins', [timekeepingController::class, 'punch_in_out_ins'])->middleware(['auth'])->name('punch_in_out_ins');
+    Route::post('get_temp_log', [timekeepingController::class, 'get_temp_log'])->middleware(['auth'])->name('get_temp_log');
+    // add delete in tk
+    Route::post('delete_ot', [timekeepingController::class, 'delete_ot'])->middleware(['auth'])->name('delete_ot');
+     //add export btn
+     Route::get('export_logs/{emp_id}', [timekeepingController::class, 'exportLogs'])->middleware(['auth'])->name('export_logs');
+      //add export all btn
+      Route::get('export_all_logs', [timekeepingController::class, 'exportAllEmployees'])->middleware(['auth'])->name('export_all_logs');
+    
+
+    
+Route::get('leave_management', [leaveController::class, 'leave_management'])->middleware(['auth'])->name('leave_management');
+    Route::post('store_leave_type', [leaveController::class, 'store_leave_type'])->middleware(['auth'])->name('store_leave_type');
+    Route::post('leave_type_tbl', [leaveController::class, 'leave_type_tbl'])->middleware(['auth'])->name('leave_type_tbl');
+    Route::post('leave_credit_tbl', [leaveController::class, 'leave_credit_tbl'])->middleware(['auth'])->name('leave_credit_tbl');
+    Route::post('store_leave_credit', [leaveController::class, 'store_leave_credit'])->middleware(['auth'])->name('store_leave_credit');
+    
+    Route::post('get_leave_balance', [leaveController::class, 'get_leave_balance'])->middleware(['auth'])->name('get_leave_balance');
+    Route::post('leave_employee_list', [leaveController::class, 'leave_employee_list'])->middleware(['auth'])->name('leave_employee_list');
+    Route::post('store_filed_leave', [leaveController::class, 'store_filed_leave'])->middleware(['auth'])->name('store_filed_leave');
+    Route::post('file_leave_tbl', [leaveController::class, 'file_leave_tbl'])->middleware(['auth'])->name('file_leave_tbl');
+    Route::post('delete_filed_leave', [leaveController::class, 'delete_filed_leave'])->middleware(['auth'])->name('delete_filed_leave');
+    // add delete in leave
+    Route::post('delete_leave', [leaveController::class, 'delete_leave'])->middleware(['auth'])->name('delete_leave');
+
+Route::get('statutory_management', [statutoriesController::class, 'statutory_management'])->middleware(['auth'])->name('statutory_management');
+    Route::post('update_gsis_rate', [statutoriesController::class, 'update_gsis_rate'])->middleware(['auth'])->name('update_gsis_rate');
+    Route::post('sss_tbl', [statutoriesController::class, 'sss_tbl'])->middleware(['auth'])->name('sss_tbl');
+    Route::post('update_sss_rate', [statutoriesController::class, 'update_sss_rate'])->middleware(['auth'])->name('update_sss_rate');
+    Route::post('ph_tbl', [statutoriesController::class, 'ph_tbl'])->middleware(['auth'])->name('ph_tbl');
+    Route::post('update_ph_rate', [statutoriesController::class, 'update_ph_rate'])->middleware(['auth'])->name('update_ph_rate');
+    Route::post('hdmf_tbl', [statutoriesController::class, 'hdmf_tbl'])->middleware(['auth'])->name('hdmf_tbl');
+    Route::post('update_hdmf_rate', [statutoriesController::class, 'update_hdmf_rate'])->middleware(['auth'])->name('update_hdmf_rate');
+    Route::post('tax_tbl', [statutoriesController::class, 'tax_tbl'])->middleware(['auth'])->name('tax_tbl');
+    Route::post('update_tax_rate', [statutoriesController::class, 'update_tax_rate'])->middleware(['auth'])->name('update_tax_rate');
+
+    
+    
+
+Route::get('payroll_management', [payrollController::class, 'payroll_management'])->middleware(['auth'])->name('payroll_management');
+    Route::post('payroll_list', [payrollController::class, 'payroll_list'])->middleware(['auth'])->name('payroll_list');
+    Route::post('save_payroll_info', [payrollController::class, 'save_payroll_info'])->middleware(['auth'])->name('save_payroll_info');
+    Route::post('tag_emp_modal', [payrollController::class, 'tag_emp_modal'])->middleware(['auth'])->name('tag_emp_modal');
+    Route::post('get_employee_list_of_payroll', [payrollController::class, 'get_employee_list_of_payroll'])->middleware(['auth'])->name('get_employee_list_of_payroll');
+
+    Route::post('tag_employee_to_payroll', [payrollController::class, 'tag_employee_to_payroll'])->middleware(['auth'])->name('tag_employee_to_payroll');
+    Route::post('tagged_employee', [payrollController::class, 'tagged_employee'])->middleware(['auth'])->name('tagged_employee');
+    Route::post('remove_tagged_employee', [payrollController::class, 'remove_tagged_employee'])->middleware(['auth'])->name('remove_tagged_employee');
+    Route::post('payroll_tagged_list', [payrollController::class, 'payroll_tagged_list'])->middleware(['auth'])->name('payroll_tagged_list');
+    Route::post('payroll_one_time_inc', [payrollController::class, 'payroll_one_time_inc'])->middleware(['auth'])->name('payroll_one_time_inc');
+    Route::post('add_oth_inc_payroll', [payrollController::class, 'add_oth_inc_payroll'])->middleware(['auth'])->name('add_oth_inc_payroll');
+    Route::post('payroll_income_tbl', [payrollController::class, 'payroll_income_tbl'])->middleware(['auth'])->name('payroll_income_tbl');
+    Route::post('delete_oth_inc_payroll', [payrollController::class, 'delete_oth_inc_payroll'])->middleware(['auth'])->name('delete_oth_inc_payroll');
+
+    Route::post('payroll_one_time_ded', [payrollController::class, 'payroll_one_time_ded'])->middleware(['auth'])->name('payroll_one_time_ded');
+    Route::post('add_oth_ded_payroll', [payrollController::class, 'add_oth_ded_payroll'])->middleware(['auth'])->name('add_oth_ded_payroll');
+    Route::post('payroll_deduction_tbl', [payrollController::class, 'payroll_deduction_tbl'])->middleware(['auth'])->name('payroll_deduction_tbl');
+    Route::post('delete_deduction_payroll', [payrollController::class, 'delete_deduction_payroll'])->middleware(['auth'])->name('delete_deduction_payroll');
+    Route::post('delete_payroll', [payrollController::class, 'delete_payroll'])->middleware(['auth'])->name('delete_payroll');
+    Route::post('check_payroll_data', [payrollController::class, 'check_payroll_data'])->middleware(['auth'])->name('check_payroll_data');
+    Route::post('payroll_process_timecard', [payrollController::class, 'payroll_process_timecard'])->middleware(['auth'])->name('payroll_process_timecard');
+    Route::post('payroll_process', [payrollController::class, 'payroll_process'])->middleware(['auth'])->name('payroll_process');
+    Route::post('payroll_process_for_approval', [payrollController::class, 'payroll_process_for_approval'])->middleware(['auth'])->name('payroll_process_for_approval');
+    
+    Route::post('approve_payroll', [payrollController::class, 'approve_payroll'])->middleware(['auth'])->name('approve_payroll');
+    Route::post('re_open_payroll', [payrollController::class, 're_open_payroll'])->middleware(['auth'])->name('re_open_payroll');
+
+    Route::post('manual_add_tk_to_payroll', [payrollController::class, 'manual_add_tk_to_payroll'])->middleware(['auth'])->name('manual_add_tk_to_payroll');
+    Route::post('get_employee_list_of_payroll_tk', [payrollController::class, 'get_employee_list_of_payroll_tk'])->middleware(['auth'])->name('get_employee_list_of_payroll_tk');
+    Route::post('tagged_employee_tk', [payrollController::class, 'tagged_employee_tk'])->middleware(['auth'])->name('tagged_employee_tk');
+    Route::post('remove_tagged_employee_tk', [payrollController::class, 'remove_tagged_employee_tk'])->middleware(['auth'])->name('remove_tagged_employee_tk');
+
+
+    
+    
+    
+    
+
+Route::get('income_management', [othIncomeController::class, 'income_management'])->middleware(['auth'])->name('income_management');
+    Route::post('oth_library_list', [othIncomeController::class, 'oth_library_list'])->middleware(['auth'])->name('oth_library_list');
+    Route::post('save_library', [othIncomeController::class, 'save_library'])->middleware(['auth'])->name('save_library');
+    Route::post('employee_array', [othIncomeController::class, 'employee_array'])->middleware(['auth'])->name('employee_array');
+    Route::post('save_other_income', [othIncomeController::class, 'save_other_income'])->middleware(['auth'])->name('save_other_income');
+    Route::post('emp_other_income_data', [othIncomeController::class, 'emp_other_income_data'])->middleware(['auth'])->name('emp_other_income_data');
+    // add delete in income
+    Route::post('delete_income', [othIncomeController::class, 'delete_income'])->middleware(['auth'])->name('delete_income');
+
+Route::get('loan_management', [loanController::class, 'loan_management'])->middleware(['auth'])->name('loan_management');
+    Route::post('save_loan_library', [loanController::class, 'save_loan_library'])->middleware(['auth'])->name('save_loan_library');
+    Route::post('employee_loan_array', [loanController::class, 'employee_loan_array'])->middleware(['auth'])->name('employee_loan_array');
+    Route::post('loan_library_list', [loanController::class, 'loan_library_list'])->middleware(['auth'])->name('loan_library_list');
+    Route::post('loan_files', [loanController::class, 'loan_files'])->middleware(['auth'])->name('loan_files');
+    // update loan
+    Route::post('employee_loan_files', [loanController::class, 'employee_loan_files'])->middleware(['auth'])->name('employee_loan_files');
+    Route::post('save_loan_employee', [loanController::class, 'save_loan_employee'])->middleware(['auth'])->name('save_loan_employee');
+    Route::post('delete_loan_employee', [loanController::class, 'delete_loan_employee'])->middleware(['auth'])->name('delete_loan_employee');
+    // add delete loan library
+    Route::post('delete_loan_library', [loanController::class, 'delete_loan_library'])->middleware(['auth'])->name('delete_loan_library');
+    // add delete in loan files
+    Route::post('delete_loan_file', [loanController::class, 'delete_loan_file'])->middleware(['auth'])->name('delete_loan_file');
+    Route::post('view_employee_data', [loanController::class, 'view_employee_data'])->middleware(['auth'])->name('view_employee_data');
+
+    
+
+    
+
+Route::get('system_management', [settingController::class, 'system_management'])->middleware(['auth'])->name('system_management');
+    Route::post('update_setting', [settingController::class, 'update_post'])->middleware(['auth'])->name('update_setting');
+Route::get('schedule_management', [scheduleController::class, 'schedule_management'])->middleware(['auth'])->name('schedule_management');
+    Route::post('sched_list', [scheduleController::class, 'sched_list'])->middleware(['auth'])->name('sched_list');
+    Route::post('update_status', [scheduleController::class, 'update_status'])->middleware(['auth'])->name('update_status');
+    Route::post('get_sched_info', [scheduleController::class, 'get_sched_info'])->middleware(['auth'])->name('get_sched_info');
+    Route::post('update_schedule', [scheduleController::class, 'update_schedule'])->middleware(['auth'])->name('update_schedule');
+    
+    Route::post('sched_library', [scheduleController::class, 'sched_library'])->middleware(['auth'])->name('sched_library');
+    Route::post('update_status_lib', [scheduleController::class, 'update_status_lib'])->middleware(['auth'])->name('update_status_lib');
+    Route::post('get_sched_lib_info', [scheduleController::class, 'get_sched_lib_info'])->middleware(['auth'])->name('get_sched_lib_info');
+    Route::post('update_schedule_library', [scheduleController::class, 'update_schedule_library'])->middleware(['auth'])->name('update_schedule_library');
+    // add delete in sched
+    Route::post('delete_sched', [scheduleController::class, 'delete_sched'])->middleware(['auth'])->name('delete_sched');
+
+Route::get('employees_management', [employeeController::class, 'employees_management'])->middleware(['auth'])->name('employees_management');
+    Route::post('employee_list', [employeeController::class, 'employee_list'])->middleware(['auth'])->name('employee_list');
+    Route::post('view_employee', [employeeController::class, 'view_employee'])->middleware(['auth'])->name('view_employee');
+    Route::post('view_user_data', [employeeController::class, 'view_user_data'])->middleware(['auth'])->name('view_user_data');
+    // add delete
+    Route::post('delete_record', [employeeController::class, 'delete_record'])->middleware(['auth'])->name('delete_record');
+    Route::post('create_user_account', [employeeController::class, 'create_user_account'])->middleware(['auth'])->name('create_user_account');
+    Route::post('update_employee', [employeeController::class, 'update_employee'])->middleware(['auth'])->name('update_employee');
+    Route::post('create_employee', [employeeController::class, 'create_employee'])->middleware(['auth'])->name('create_employee');
+
+    Route::post('division_list', [employeeController::class, 'division_list'])->middleware(['auth'])->name('division_list');
+        Route::post('save_division', [employeeController::class, 'save_division'])->middleware(['auth'])->name('save_division');
+    Route::post('department_list', [employeeController::class, 'department_list'])->middleware(['auth'])->name('department_list');
+        Route::post('save_department', [employeeController::class, 'save_department'])->middleware(['auth'])->name('save_department');
+    Route::post('branch_list', [employeeController::class, 'branch_list'])->middleware(['auth'])->name('branch_list');
+        Route::post('save_branch', [employeeController::class, 'save_branch'])->middleware(['auth'])->name('save_branch');
+    Route::post('position_list', [employeeController::class, 'position_list'])->middleware(['auth'])->name('position_list');
+        Route::post('save_position', [employeeController::class, 'save_position'])->middleware(['auth'])->name('save_position');
+    Route::post('designation_list', [employeeController::class, 'designation_list'])->middleware(['auth'])->name('designation_list');
+        Route::post('save_designation', [employeeController::class, 'save_designation'])->middleware(['auth'])->name('save_designation');        
+
+
+     //face time audit
+    Route::get('face_and_time_audit', [facetimeauditController::class, 'face_and_time_audit'])->middleware(['auth'])->name('face_and_time_audit');
+    Route::post('load_face_time_audit_tbl', [facetimeauditController::class, 'load_face_time_audit_tbl'])->middleware(['auth'])->name('load_face_time_audit_tbl');
+    
+
+    
+
+
+
+
+
+
+
+
+        //TEMPO
+Route::get('/', function () {  
+
+    return redirect('login'); 
+});
+
+
+Route::get('/logout', function () { Auth::logout(); return redirect('/');  })->name('log-out');
+
+
+// Route::get('/dashboard', function () {
+//     return view('dashboard');
+// })->middleware(['auth'])->name('dashboard');
+
+require __DIR__.'/auth.php';
