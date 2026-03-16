@@ -293,7 +293,7 @@ class AccountabilitiesController extends Controller
                 ]);
 
             // Filter by role-based group management
-            if ($role_id === 1) {
+            if ($role_id === 1 || $role_id === 27) {
                 // Admin sees all accountabilities
             } elseif ($role_id === 4) { // HR Group D
                 $query->where(function ($q) {

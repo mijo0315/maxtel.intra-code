@@ -37,8 +37,8 @@ class NteController extends Controller
             $nteNotesQuery = NteNote::with(['employee', 'replies.employee'])->whereNull('parent_id');
             
             if ($canCreateNte && !$isReadOnly) {
-                if ($role_id == 1) {
-                    // Admin sees all employees and all notes
+                if ($role_id == 1 || $role_id == 27) {
+                    // Admin and role_id 27 see all employees and all notes
                     $employees = Employee::all();
                     $nteNotes = $nteNotesQuery->latest()->get();
                 } else {
@@ -301,7 +301,7 @@ class NteController extends Controller
         try {
             // Get notes based on user role
             $employee = Employee::where('user_id', auth()->id())->first();
-            if (auth()->user()->role_id == 1) {
+            if (auth()->user()->role_id == 1 || auth()->user()->role_id == 27) {
                 $nteNotes = NteNote::with(['employee'])->whereNull('parent_id')->latest()->get();
             } else {
                 $nteNotes = $employee ? NteNote::where('employee_id', $employee->id)->whereNull('parent_id')->with(['employee'])->latest()->get() : collect([]);

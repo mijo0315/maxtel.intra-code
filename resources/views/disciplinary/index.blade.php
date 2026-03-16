@@ -108,8 +108,8 @@
                                     <option value="30day_suspension">30 Day Suspension</option>
                                     <option value="30day_preventive_suspension">30 Day Preventive Suspension</option>
                                     <option value="end_of_contract">End of Contract(OEC)</option>
-                                    <option value="termination">For Termination</option>For Administrative Hearing
-                                    <option value="For Administrative Hearing">For Administrative Hearing</option>
+                                    <option value="termination">For Termination</option>
+                                 
                                 </select>
                                 @error('sanction')
                                     <span class="invalid-feedback" role="alert">
@@ -134,7 +134,7 @@
 
                         <div class="form-group row mb-0">
                             <div class="col-md-10 offset-md-2">
-                                <button type="submit" class="btn btn-primary">
+                                <button type="submit" class="btn btn-success">
                                     {{ __('Create Disciplinary Note') }}
                                 </button>
                             </div>
@@ -169,7 +169,7 @@
                             <div class="form-group mr-2" style="flex: 1;">
                                 <input type="text" name="search" class="form-control w-100" placeholder="Search by employee name, document number, or case details..." value="{{ $search }}">
                             </div>
-                            <button type="submit" class="btn btn-primary">
+                            <button type="submit" class="btn btn-success">
                                 <i class="fas fa-search"></i> Search
                             </button>
                             @if($search)

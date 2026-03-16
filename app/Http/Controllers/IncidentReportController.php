@@ -32,8 +32,8 @@ class IncidentReportController extends Controller
         // Filter employees based on role-based group management
         $query = Employee::where('tbl_employee.is_active', 1);
         
-        if ($role_id === 1) {
-            // Admin sees all employees
+        if ($role_id === 1 || $role_id === 27) {
+            // Admin and role_id 27 see all employees
             $employees = $query->get();
         } elseif ($role_id === 4) { // HR Group D
             $employees = $query->where(function ($q) {
@@ -108,8 +108,8 @@ class IncidentReportController extends Controller
             $reportQuery = IncidentReport::with(['reportedByEmployee', 'disciplinaryNote']);
             
             // Filter by role-based groups
-            if ($role_id === 1) {
-                // Admin sees all reports
+            if ($role_id === 1 || $role_id === 27) {
+                // Admin and role_id 27 see all reports
                 $reportQuery = $reportQuery;
             } elseif ($role_id === 4) { // HR Group D
                 $reportQuery = $reportQuery->whereHas('reportedByEmployee', function($q) {
@@ -175,7 +175,7 @@ class IncidentReportController extends Controller
         $role_id = Auth::user()->role_id;
         $query = Employee::where('tbl_employee.is_active', 1);
         
-        if ($role_id === 1) {
+        if ($role_id === 1 || $role_id === 27) {
             $employees = $query->get();
         } elseif ($role_id === 4) {
             $employees = $query->where(function ($q) {

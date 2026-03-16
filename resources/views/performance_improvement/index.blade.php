@@ -42,7 +42,7 @@
 
 		@if(preg_match("/R/i", Auth::user()->access[Route::current()->action["as"]]["access"])=="0")
 			<label>YOU HAVE NO PRIVILEDGE ON THIS PAGE</label>
-		@elseif(Auth::user()->access[Route::current()->action["as"]]["user_type"] == "employee" || Auth::user()->role_id == 2 || $isReadOnly)
+		@elseif(Auth::user()->access[Route::current()->action["as"]]["user_type"] == "employee" || Auth::user()->role_id == 2 || Auth::user()->role_id == 27 || $isReadOnly)
 			<div class="row">
 				<div class="col-md-12">
 					<h4 class="mb-4">My Performance Improvement Notes</h4>

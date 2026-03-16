@@ -40,7 +40,7 @@
 
 		@if(preg_match("/R/i", Auth::user()->access[Route::current()->action["as"]]["access"])=="0")
 			<label>YOU HAVE NO PRIVILEDGE ON THIS PAGE</label>
-		@elseif(!$canCreateNte || Auth::user()->access[Route::current()->action["as"]]["user_type"] == "employee")
+		@elseif((!$canCreateNte || Auth::user()->access[Route::current()->action["as"]]["user_type"] == "employee") && Auth::user()->role_id != 1 && Auth::user()->role_id != 27)
 			<div class="row">
 				<div class="col-md-12">
 					<h4 class="mb-4">My NTE Notes</h4>
@@ -216,7 +216,7 @@
 									<button class="btn btn-sm btn-info" data-toggle="modal" data-target="#nteViewModal-{{ $note->id }}">
 										<i class="fas fa-eye"></i> View @if($note->replies && $note->replies->count() > 0)({{ $note->replies->count() }})@endif
 									</button>
-									@if(Auth::user()->role_id != 1)
+									@if(Auth::user()->role_id != 1 && Auth::user()->role_id != 27)
 										<button class="btn btn-sm btn-success" data-toggle="modal" data-target="#nteReplyModalTable-{{ $note->id }}">Reply</button>
 							@else
 								<button class="btn btn-sm btn-warning" data-toggle="modal" data-target="#nteEditModal-{{ $note->id }}" title="Edit NTE">
@@ -232,7 +232,7 @@
 						</td>
 						</tr>
 
-						@if(Auth::user()->role_id != 1)
+						@if(Auth::user()->role_id != 1 && Auth::user()->role_id != 27)
 					
 						<!-- View Modal -->
 						<div class="modal fade" id="nteViewModal-{{ $note->id }}" tabindex="-1" role="dialog">

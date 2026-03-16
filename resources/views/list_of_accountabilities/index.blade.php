@@ -25,7 +25,7 @@
             </div>
         </div>
     </div>
-@elseif(Auth::user()->access[Route::current()->action["as"]]["user_type"] == "employee" || Auth::user()->role_id == 2)
+@elseif((Auth::user()->access[Route::current()->action["as"]]["user_type"] == "employee" && Auth::user()->role_id != 27) || Auth::user()->role_id == 2)
     <!-- Staff View - Show only their own accountabilities -->
     <div class="page-wrapper" id="staff_accountabilities_page">
         <div class="content container-fluid">
@@ -454,7 +454,7 @@
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
 @php
-    $isStaffOrEmployee = Auth::user()->role_id == 2 || (isset(Auth::user()->access[$routeName]) && Auth::user()->access[$routeName]["user_type"] == "employee");
+    $isStaffOrEmployee = Auth::user()->role_id == 2 || (isset(Auth::user()->access[$routeName]) && Auth::user()->access[$routeName]["user_type"] == "employee" && Auth::user()->role_id != 27);
 @endphp
 
 <script>

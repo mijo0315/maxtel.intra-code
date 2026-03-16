@@ -266,7 +266,7 @@
                             <div class="form-group mr-2" style="flex: 1;">
                                 <input type="text" name="search" class="form-control w-100" placeholder="Search by document number, incident type, or location..." value="{{ $search }}">
                             </div>
-                            <button type="submit" class="btn btn-primary">
+                            <button type="submit" class="btn btn-success">
                                 <i class="fas fa-search"></i> Search
                             </button>
                             @if($search)

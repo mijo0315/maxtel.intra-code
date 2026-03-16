@@ -31,8 +31,8 @@ class DisciplinaryController extends Controller
             $employee = Employee::where('user_id', auth()->id())->first();
             $role_id = Auth::user()->role_id;
             
-            if (auth()->user()->role_id == 1 && !$isReadOnly) {
-                // Admin view (non-read-only) - show all parent notes and employees
+            if ((auth()->user()->role_id == 1 || auth()->user()->role_id == 27) && !$isReadOnly) {
+                // Admin and role_id 27 view (non-read-only) - show all parent notes and employees
                 $employees = Employee::all();
                 $noteQuery = DisciplinaryNote::whereNull('parent_id')->with(['employee', 'replies.employee'])->whereNotNull('employee_id');
                 
@@ -270,8 +270,8 @@ class DisciplinaryController extends Controller
             $employee = Employee::where('user_id', auth()->id())->first();
             $role_id = Auth::user()->role_id;
             
-            if (auth()->user()->role_id == 1) {
-                // Admin exports all notes
+            if (auth()->user()->role_id == 1 || auth()->user()->role_id == 27) {
+                // Admin and role_id 27 export all notes
                 $disciplinaryNotes = DisciplinaryNote::whereNull('parent_id')->with(['employee'])->latest()->get();
             } else {
                 // HR Managers: filter notes based on role-based groups

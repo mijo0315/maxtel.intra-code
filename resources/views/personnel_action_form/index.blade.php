@@ -455,12 +455,16 @@ Personnel Action Form
                                             </button>
                                         </td>
                                         <td>
-                                            <button type="button" class="btn btn-sm btn-info" onclick="editAction('{{ $action->id }}')" title="Edit" style="padding: 0.25rem 0.5rem;">
-                                                <i class="fa fa-edit"></i>
-                                            </button>
-                                            <button type="button" class="btn btn-sm btn-danger" onclick="deleteAction('{{ $action->id }}')" title="Delete" style="padding: 0.25rem 0.5rem;">
-                                                <i class="fa fa-trash"></i>
-                                            </button>
+                                            @if(!$isReadOnly)
+                                                <button type="button" class="btn btn-sm btn-info" onclick="editAction('{{ $action->id }}')" title="Edit" style="padding: 0.25rem 0.5rem;">
+                                                    <i class="fa fa-edit"></i>
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-danger" onclick="deleteAction('{{ $action->id }}')" title="Delete" style="padding: 0.25rem 0.5rem;">
+                                                    <i class="fa fa-trash"></i>
+                                                </button>
+                                            @else
+                                                <span class="text-muted" title="View only">View only</span>
+                                            @endif
                                         </td>
                                     </tr>
                                 @empty
