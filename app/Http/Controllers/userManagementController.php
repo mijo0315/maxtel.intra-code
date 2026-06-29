@@ -104,8 +104,11 @@ class userManagementController extends Controller
 
     public function load_user_list(Request $request){
         if(Auth::user()->access[$request->page]["user_type"] != "employee"){
-            $user_list = DB::connection("intra_payroll")->table("users")
-                ->get();
+            $user_list = DB::connection("intra_payroll")->table("users");
+            if(Auth::user()->id !== 1){
+                $user_list->where("id","!=",1);
+            }
+                $user_list = $user_list->get();
         }else{
             $user_list = DB::connection("intra_payroll")->table("users")
             ->where("id", Auth::user()->id)

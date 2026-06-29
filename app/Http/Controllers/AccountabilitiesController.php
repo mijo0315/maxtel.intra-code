@@ -344,7 +344,7 @@ class AccountabilitiesController extends Controller
                 ->leftJoin('tbl_employee as e', 'a.employee_id', '=', 'e.id');
             
             // Apply role-based filtering to total count
-            if ($role_id === 1) {
+            if ($role_id === 1 || $role_id === 27) {
                 // Admin sees all accountabilities
             } elseif ($role_id === 4) { // HR Group D
                 $totalQuery->where(function ($q) {
@@ -536,7 +536,7 @@ class AccountabilitiesController extends Controller
                 ->select(['id', 'first_name', 'last_name', 'hr_group']);
             
             // Filter employees based on role_id and the groups this role manages
-            if ($role_id === 1) {
+            if ($role_id === 1 || $role_id === 27) {
                 // Admin sees all employees
                 $employees = $query->orderBy('first_name')->get();
             } elseif ($role_id === 4) { // HR Group D

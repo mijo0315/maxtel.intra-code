@@ -197,7 +197,13 @@ Personnel Action Form
                                 <div class="col-md-6">
                                     <div class="form-group">
                                         <label for="other_specify" class="form-label">Other (Specify)</label>
-                                        <input type="text" class="form-control" id="other_specify" placeholder="Specify other action if selected" style="display:none;">
+                                        <div class="d-flex gap-2">
+                                            <input type="text" class="form-control flex-grow-1" id="other_specify" name="other_specify" placeholder="Enter additional details or custom action type">
+                                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="addOtherSpecifyField()" title="Add More">
+                                                <i class="fa fa-plus"></i>
+                                            </button>
+                                        </div>
+                                        <div id="additionalOthersContainer" style="margin-top: 10px;"></div>
                                     </div>
                                 </div>
                             </div>
@@ -346,8 +352,13 @@ Personnel Action Form
                                                         <tr>
                                                             <td><strong>Others (Specify)</strong></td>
                                                             <td><input type="text" class="form-control" name="details[0][others_from]" placeholder="Current Others"></td>
-                                                            <td><input type="text" class="form-control" name="details[0][others_to]" placeholder="New Others"></td>
+                                                            <td>
+                                                                <input type="text" class="form-control" name="details[0][others_to]" placeholder="New Others">
+                                                            </td>
                                                         </tr>
+                                                        <tbody id="othersRows">
+                                                            <!-- Additional Others rows will be added here -->
+                                                        </tbody>
                                                         <tr>
                                                             <td><strong>Total Compensation</strong></td>
                                                             <td><input type="number" class="form-control" name="details[0][total_comp_from]" placeholder="Current Total" step="0.01"></td>
@@ -551,10 +562,25 @@ Personnel Action Form
                 <input type="date" class="form-control" id="edit_effective_date" name="effective_date" required>
               </div>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-6" id="edit_other_specify_container">
+              <div class="form-group">
+                <label for="edit_other_specify" class="form-label">Other (Specify)</label>
+                <div class="d-flex gap-2">
+                  <input type="text" class="form-control flex-grow-1" id="edit_other_specify" name="other_specify" placeholder="Enter additional details or custom action type">
+                  <button type="button" class="btn btn-sm btn-outline-primary" onclick="addEditOtherSpecifyField()" title="Add More">
+                    <i class="fa fa-plus"></i>
+                  </button>
+                </div>
+                <div id="editAdditionalOthersContainer" style="margin-top: 10px;"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-12">
               <div class="form-group">
                 <label for="edit_remarks" class="form-label">Remarks</label>
-                <input type="text" class="form-control" id="edit_remarks" name="remarks" placeholder="Enter remarks">
+                <textarea class="form-control" id="edit_remarks" name="remarks" rows="2" placeholder="Enter remarks"></textarea>
               </div>
             </div>
           </div>
@@ -697,8 +723,18 @@ Personnel Action Form
                         <tr>
                           <td><strong>Others (Specify)</strong></td>
                           <td><input type="text" class="form-control" id="edit_others_from" name="details[0][others_from]" placeholder="Current Others"></td>
-                          <td><input type="text" class="form-control" id="edit_others_to" name="details[0][others_to]" placeholder="New Others"></td>
+                          <td>
+                            <div class="d-flex gap-2">
+                              <input type="text" class="form-control flex-grow-1" id="edit_others_to" name="details[0][others_to]" placeholder="New Others">
+                              <button type="button" class="btn btn-sm btn-outline-primary" onclick="addEditOthersRow()" title="Add More Others">
+                                <i class="fa fa-plus"></i>
+                              </button>
+                            </div>
+                          </td>
                         </tr>
+                        <tbody id="editOthersRows">
+                          <!-- Additional Others rows will be added here -->
+                        </tbody>
                         <tr>
                           <td><strong>Total Compensation</strong></td>
                           <td><input type="number" class="form-control" id="edit_total_comp_from" name="details[0][total_comp_from]" placeholder="Current Total" step="0.01"></td>
@@ -726,6 +762,10 @@ Personnel Action Form
 @section("scripts")
 <script>
     $(document).ready(function() {
+        // Reset additional others container on page load
+        $('#additionalOthersContainer').empty();
+        otherSpecifyCount = 1;
+        
         // Map for action types
         const actionTypeMap = {
             'employment': 'Employment',
@@ -891,13 +931,11 @@ Personnel Action Form
             // Store the action type in the hidden field
             $('#action_type').val(actionType);
             
+            // Other (Specify) field is always visible, but only required when "Other" is selected
             if (actionType === "other") {
-                $("#other_specify").show();
                 $("#other_specify").prop("required", true);
             } else {
-                $("#other_specify").hide();
                 $("#other_specify").prop("required", false);
-                $("#other_specify").val("");
             }
         });
 
@@ -1002,6 +1040,24 @@ Personnel Action Form
         $("#personnelActionForm").on("submit", function(e) {
             e.preventDefault();
             
+            // Concatenate all "Other (Specify)" values
+            let otherSpecifyValues = [];
+            const mainOtherSpecify = $("#other_specify").val();
+            if (mainOtherSpecify && mainOtherSpecify.trim()) {
+                otherSpecifyValues.push(mainOtherSpecify.trim());
+            }
+            
+            // Add all additional "Other (Specify)" fields
+            $('[name^="other_specify_"]').each(function() {
+                const val = $(this).val();
+                if (val && val.trim()) {
+                    otherSpecifyValues.push(val.trim());
+                }
+            });
+            
+            // Set the main field with concatenated values
+            $("#other_specify").val(otherSpecifyValues.join(" | "));
+            
             const formData = new FormData(this);
             const actionUrl = $(this).attr("action");
             
@@ -1078,6 +1134,18 @@ Personnel Action Form
                         <h6 class="font-weight-bold">Effective Date: </h6>
                         <p>${response.effective_date ? new Date(response.effective_date).toLocaleDateString() : 'N/A'}</p>
                     </div>
+                    ${response.other_specify ? `
+                    <div class="mb-3">
+                        <h6 class="font-weight-bold">Other (Specify): </h6>
+                        <p>${response.other_specify.split(' | ').map(v => `<div>${v}</div>`).join('')}</p>
+                    </div>
+                    ` : ''}
+                    ${response.remarks ? `
+                    <div class="mb-3">
+                        <h6 class="font-weight-bold">Remarks: </h6>
+                        <p>${response.remarks}</p>
+                    </div>
+                    ` : ''}
                     <hr>
                     <h6 class="font-weight-bold mb-3">Details:</h6>
                     <div class="table-responsive">
@@ -1216,7 +1284,45 @@ Personnel Action Form
                     const actionTypeName = actionTypeMap[response.action_type] || response.action_type;
                     $('#edit_action_type_name').text(actionTypeName);
                     
+                    // Make required only if action type is "other"
+                    if (response.action_type === 'other') {
+                        $('#edit_other_specify').prop('required', true);
+                    } else {
+                        $('#edit_other_specify').prop('required', false);
+                    }
+                    
                     $('#edit_effective_date').val(response.effective_date);
+                    
+                    // Clear and reset the additional others container
+                    $('#editAdditionalOthersContainer').empty();
+                    editOtherSpecifyCount = 1;
+                    
+                    // Handle multiple "Other (Specify)" values separated by " | "
+                    if (response.other_specify) {
+                        const otherSpecifyValues = response.other_specify.split(' | ').map(s => s.trim());
+                        if (otherSpecifyValues.length > 0) {
+                            $('#edit_other_specify').val(otherSpecifyValues[0] || '');
+                            
+                            // Add remaining values as additional fields
+                            for (let i = 1; i < otherSpecifyValues.length; i++) {
+                                const container = document.getElementById('editAdditionalOthersContainer');
+                                const rowHTML = `
+                                    <div class="d-flex gap-2 mb-2">
+                                        <input type="text" class="form-control flex-grow-1" name="other_specify_${editOtherSpecifyCount}" value="${otherSpecifyValues[i]}" placeholder="Enter additional details or custom action type">
+                                        <button type="button" class="btn btn-sm btn-danger" onclick="removeEditOtherSpecifyField(this)">
+                                            <i class="fa fa-trash"></i>
+                                        </button>
+                                    </div>
+                                `;
+                                const newField = document.createElement('div');
+                                newField.innerHTML = rowHTML.trim();
+                                container.appendChild(newField.firstElementChild);
+                                editOtherSpecifyCount++;
+                            }
+                        }
+                    } else {
+                        $('#edit_other_specify').val('');
+                    }
                     $('#edit_remarks').val(response.remarks || '');
                     
                     // Populate the details
@@ -1282,6 +1388,25 @@ Personnel Action Form
     // Function to submit the edit form
     function submitEditForm() {
         const actionId = $('#edit_action_id').val();
+        
+        // Concatenate all "Other (Specify)" values
+        let otherSpecifyValues = [];
+        const mainOtherSpecify = $('#edit_other_specify').val();
+        if (mainOtherSpecify && mainOtherSpecify.trim()) {
+            otherSpecifyValues.push(mainOtherSpecify.trim());
+        }
+        
+        // Add all additional "Other (Specify)" fields
+        $('#editAdditionalOthersContainer').find('input[type="text"]').each(function() {
+            const val = $(this).val();
+            if (val && val.trim()) {
+                otherSpecifyValues.push(val.trim());
+            }
+        });
+        
+        // Set the main field with concatenated values
+        $('#edit_other_specify').val(otherSpecifyValues.join(" | "));
+        
         const formData = new FormData($('#editForm')[0]);
         formData.append('_token', '{{ csrf_token() }}');
         
@@ -1312,6 +1437,119 @@ Personnel Action Form
                 alert("Error: " + errorMessage);
             }
         });
+    }
+
+    // Counter for additional Other (Specify) fields
+    let otherSpecifyCount = 1;
+    let editOtherSpecifyCount = 1;
+
+    // Counter for additional Others rows
+    let othersRowCount = 1;
+
+    // Function to add more Others rows in main form
+    function addOthersRow() {
+        const othersContainer = document.getElementById('othersRows');
+        const rowHTML = `
+            <tr>
+                <td><strong>Others (Specify) #${othersRowCount + 1}</strong></td>
+                <td><input type="text" class="form-control" name="details[0][others_from_${othersRowCount}]" placeholder="Current Others"></td>
+                <td>
+                    <div class="d-flex gap-2">
+                        <input type="text" class="form-control flex-grow-1" name="details[0][others_to_${othersRowCount}]" placeholder="New Others">
+                        <button type="button" class="btn btn-sm btn-danger" onclick="removeOthersRow(this)">
+                            <i class="fa fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+        const newRow = document.createElement('tr');
+        newRow.innerHTML = rowHTML.trim();
+        othersContainer.appendChild(newRow);
+        othersRowCount++;
+    }
+
+    // Function to remove Others row in main form
+    function removeOthersRow(btn) {
+        btn.closest('tr').remove();
+    }
+
+    // Counter for additional Others rows in edit form
+    let editOthersRowCount = 1;
+
+    // Function to add more Others rows in edit modal
+    function addEditOthersRow() {
+        const editOthersContainer = document.getElementById('editOthersRows');
+        const rowHTML = `
+            <tr>
+                <td><strong>Others (Specify) #${editOthersRowCount + 1}</strong></td>
+                <td><input type="text" class="form-control" name="details[0][others_from_${editOthersRowCount}]" placeholder="Current Others"></td>
+                <td>
+                    <div class="d-flex gap-2">
+                        <input type="text" class="form-control flex-grow-1" name="details[0][others_to_${editOthersRowCount}]" placeholder="New Others">
+                        <button type="button" class="btn btn-sm btn-danger" onclick="removeEditOthersRow(this)">
+                            <i class="fa fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+        const newRow = document.createElement('tr');
+        newRow.innerHTML = rowHTML.trim();
+        editOthersContainer.appendChild(newRow);
+        editOthersRowCount++;
+    }
+
+    // Function to remove Others row in edit modal
+    function removeEditOthersRow(btn) {
+        btn.closest('tr').remove();
+    }
+
+    // Counter for additional Other (Specify) fields at top of form
+
+    // Function to add more Other (Specify) fields in main form
+    function addOtherSpecifyField() {
+        const container = document.getElementById('additionalOthersContainer');
+        const rowHTML = `
+            <div class="d-flex gap-2 mb-2">
+                <input type="text" class="form-control flex-grow-1" name="other_specify_${otherSpecifyCount}" placeholder="Enter additional details or custom action type">
+                <button type="button" class="btn btn-sm btn-danger" onclick="removeOtherSpecifyField(this)">
+                    <i class="fa fa-trash"></i>
+                </button>
+            </div>
+        `;
+        const newField = document.createElement('div');
+        newField.innerHTML = rowHTML.trim();
+        container.appendChild(newField.firstElementChild);
+        otherSpecifyCount++;
+    }
+
+    // Function to remove Other (Specify) field in main form
+    function removeOtherSpecifyField(btn) {
+        btn.parentElement.remove();
+    }
+
+
+    // Function to add more Other (Specify) fields in edit modal
+    function addEditOtherSpecifyField() {
+        const container = document.getElementById('editAdditionalOthersContainer');
+        const rowHTML = `
+            <div class="d-flex gap-2 mb-2">
+                <input type="text" class="form-control flex-grow-1" name="other_specify_${editOtherSpecifyCount}" placeholder="Enter additional details or custom action type">
+                <button type="button" class="btn btn-sm btn-danger" onclick="removeEditOtherSpecifyField(this)">
+                    <i class="fa fa-trash"></i>
+                </button>
+            </div>
+        `;
+        const newField = document.createElement('div');
+        newField.innerHTML = rowHTML.trim();
+        container.appendChild(newField.firstElementChild);
+        editOtherSpecifyCount++;
+    }
+
+    // Function to remove Other (Specify) field in edit modal
+    function removeEditOtherSpecifyField(btn) {
+        btn.parentElement.remove();
     }</script>
 
 <!-- Success Modal -->

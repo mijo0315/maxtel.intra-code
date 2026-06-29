@@ -167,6 +167,114 @@ class pictureAppAuditController extends Controller
         }
     }
 
+    public function delete_picture_app_audit_images(Request $request)
+    {
+        if (!$request->filled('date_range')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please select a date range before deleting images.',
+            ], 422);
+        }
+
+        $faceRoot = rtrim(config('services.face_images.root'), '/\\');
+        $entriesPath = trim(config('services.face_images.entries_path'), '/\\');
+
+        if (empty($faceRoot) || empty($entriesPath)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Face image storage path is not configured.',
+            ], 500);
+        }
+
+        [$start_date, $end_date] = explode(' - ', $request->date_range);
+        $start_ts = strtotime($start_date . ' 00:00:00');
+        $end_ts = strtotime($end_date . ' 23:59:59');
+
+        $logs = DB::connection("face_db")->table("tbl_entries")
+            ->whereNotNull("image_url")
+            ->where("image_url", "!=", "")
+            ->whereBetween('phone_timestamp', [$start_ts, $end_ts]);
+
+        $rows = $logs->select("id", "image_url")->get();
+        $entriesRoot = $this->normalizePath($faceRoot . DIRECTORY_SEPARATOR . $entriesPath);
+        $deletedFiles = 0;
+        $missingFiles = 0;
+        $skippedFiles = 0;
+        $clearedRows = 0;
+
+        foreach ($rows as $row) {
+            $relativePath = parse_url($row->image_url, PHP_URL_PATH) ?: $row->image_url;
+            $relativePath = ltrim($relativePath, "/\\");
+            $fullPath = $this->normalizePath($faceRoot . DIRECTORY_SEPARATOR . $relativePath);
+
+            if (!$this->isPathInside($fullPath, $entriesRoot)) {
+                $skippedFiles++;
+                continue;
+            }
+
+            if (file_exists($fullPath) && is_file($fullPath)) {
+                if (@unlink($fullPath)) {
+                    $deletedFiles++;
+                } else {
+                    $skippedFiles++;
+                    continue;
+                }
+            } else {
+                $missingFiles++;
+            }
+
+            DB::connection("face_db")
+                ->table("tbl_entries")
+                ->where("id", $row->id)
+                ->update(["image_url" => ""]);
+
+            $clearedRows++;
+        }
+
+        return response()->json([
+            'success' => true,
+            'matched_logs' => $rows->count(),
+            'cleared_logs' => $clearedRows,
+            'deleted_files' => $deletedFiles,
+            'missing_files' => $missingFiles,
+            'skipped_files' => $skippedFiles,
+        ]);
+    }
+
+    private function normalizePath($path)
+    {
+        $path = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
+        $parts = [];
+
+        foreach (explode(DIRECTORY_SEPARATOR, $path) as $part) {
+            if ($part === '' || $part === '.') {
+                continue;
+            }
+
+            if ($part === '..') {
+                array_pop($parts);
+                continue;
+            }
+
+            $parts[] = $part;
+        }
+
+        $prefix = DIRECTORY_SEPARATOR;
+        if (preg_match('/^[A-Za-z]:$/', $parts[0] ?? '')) {
+            $prefix = '';
+        }
+
+        return $prefix . implode(DIRECTORY_SEPARATOR, $parts);
+    }
+
+    private function isPathInside($path, $root)
+    {
+        $root = rtrim($root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        $path = rtrim($path, DIRECTORY_SEPARATOR);
+
+        return strpos($path, $root) === 0;
+    }
+
     public function export_all_entries(Request $request)
     {
         try {

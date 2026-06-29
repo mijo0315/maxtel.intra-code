@@ -1298,6 +1298,10 @@ class payrollController extends Controller
            
                 $absent_days = $time_keep["absent"] / $daily_divisor;
                 $real_present_days = $time_keep["present_days"] - $absent_days;
+                if($emp_rate_type == "DAILY"){
+                    $real_present_days = $time_keep["regular_work"] + $time_keep["regular_holiday"] + $time_keep["special_holiday"];
+                    $real_present_days = $real_present_days / 8;
+                }
             }else{
                 
                 $present_days = 0;
@@ -1466,18 +1470,18 @@ class payrollController extends Controller
                             "user_id" => Auth::user()->id
                         ));
                 }
-                if($night_diff > 0){
-                    $ot_rate = $this->search_multi_array($lib_ot_table, "code", "ND");
-                    $ot_amount = ($emp_hourly_rate * $night_diff) * $ot_rate["rate"] ;
-                        array_push($payroll_income, array(
-                            "payroll_id" => $request->pay_id,
-                            "emp_id" => $emp_info,
-                            "type" => "ND",
-                            "amount" => $ot_amount,
-                            "date_created" => date("Y-m-d"),
-                            "user_id" => Auth::user()->id
-                        ));
-                }
+                // if($night_diff > 0){ //commented May 28 2026
+                //     $ot_rate = $this->search_multi_array($lib_ot_table, "code", "ND");
+                //     $ot_amount = ($emp_hourly_rate * $night_diff) * $ot_rate["rate"] ;
+                //         array_push($payroll_income, array(
+                //             "payroll_id" => $request->pay_id,
+                //             "emp_id" => $emp_info,
+                //             "type" => "ND",
+                //             "amount" => $ot_amount,
+                //             "date_created" => date("Y-m-d"),
+                //             "user_id" => Auth::user()->id
+                //         ));
+                // }
                 if($rd > 0){
                     $ot_rate = $this->search_multi_array($lib_ot_table, "code", "RD");
                     $rd_rate = $ot_rate["rate"];
@@ -2035,6 +2039,8 @@ class payrollController extends Controller
                     ->orWhere("type", "HDMF")
                     ->where("payroll_id", $request->pay_id)
                     ->orWhere("type", "UT")
+                    ->where("payroll_id", $request->pay_id) 
+                    ->orWhere("type", "Leave Without Pay")
                     ->where("payroll_id", $request->pay_id)
                     ->delete();
                 DB::connection("intra_payroll")->table("tbl_statutory_company")
@@ -2304,37 +2310,89 @@ class payrollController extends Controller
                             ->where("leave_status", "APPROVED")
                             ->whereRaw($query_raw_leave)
                             ->first();
+                        $process_timecard = true;
+                        $leave_hours = 0;
                         if($leave_day != null){
+                            $has_leave = true;
+
                             $credit_type = $this->search_multi_array($tbl_leave_credits, "leave_id", $leave_day->leave_source_id);
-                                if(isset($credit_type["leave_id"])){
-                                    $leave_type = $this->search_multi_array($tbl_leave_types, "id", $credit_type["leave_id"]);
-                                    if(isset($leave_type["leave_type"])){
-                                        if($leave_type["is_with_credits"] == 1){
-                                            if($leave_type["leave_type"] == "SL"){
-                                                $leave_type_tc ="sick_leave";
-                                            }else{
-                                                $leave_type_tc ="regular_leave";
-                                            }
-                                        }else{
-                                            $leave_type_tc ="special_leave";
-                                        }                                        
+                            if(isset($credit_type["leave_id"])){
+                                $leave_type = $this->search_multi_array($tbl_leave_types, "id", $credit_type["leave_id"]);
+                                if(isset($leave_type["leave_type"])){
+                                    if($leave_type["is_with_credits"] == 1){
+                                        $leave_type_tc = ($leave_type["leave_type"] == "SL") ? "sick_leave" : "regular_leave";
                                     }else{
                                         $leave_type_tc = "special_leave";
                                     }
                                 }else{
-                                    $leave_type = $this->search_multi_array($tbl_leave_types, "id", $leave_day->leave_source_id);
-                                    if(isset($leave_type["leave_type"])){
-                                        if($leave_type["id"] == 16){  // Approved Official Business with pay
-                                            $leave_type_tc ="regular_leave";
-                                        }else{
-                                            $leave_type_tc = "special_leave";
-                                        }
-                                    }else{
-                                        $leave_type_tc = "special_leave";
-                                    }
+                                    $leave_type_tc = "special_leave";
                                 }
-                            $timekeeping_data[$leave_type_tc] =Auth::user()->company["daily_divisor"];
-                        }else{
+                            }else{
+                                $leave_type = $this->search_multi_array($tbl_leave_types, "id", $leave_day->leave_source_id);
+                                if(isset($leave_type["leave_type"])){
+                                    $leave_type_tc = in_array($leave_type["id"], [14, 16]) //16 = Approved Official Business with pay 14 = WFH w/ pay
+                                    ? "regular_leave" 
+                                    : "special_leave";
+                                }else{
+                                    $leave_type_tc = "special_leave";
+                                }
+                            }
+
+                            // HANDLE HALF DAY
+                            if($leave_day->half_day == 1 || $leave_day->leave_count == 0.5){
+                                $is_half_day_leave = true;
+                                $leave_hours = Auth::user()->company["daily_divisor"] / 2; // 4
+                            }else{
+                                $leave_hours = Auth::user()->company["daily_divisor"]; // 8
+                            }
+
+                            $timekeeping_data[$leave_type_tc] = $leave_hours;
+                            if ($leave_hours >= 8) {
+                                $process_timecard = false;
+                            }
+
+                            // $timecard_data = DB::connection("intra_payroll")->table("tbl_timecard")
+                            // ->where("emp_id", $emp_id)
+                            // ->where("target_date", $cur_date)
+                            // ->first();
+                            // $daily_applied_ot = array_filter($applied_ot, function($ot) use ($cur_date) {
+                            //     return $ot["date_target"] == $cur_date;
+                            // });
+                            // foreach ($daily_applied_ot as $applied) {
+                            //     if($timecard_data != null){
+                            //         if($timecard_data->AM_IN != "" && $timecard_data->PM_OUT != ""){
+                            //             $ot_from = strtotime($applied["time_from"]);
+                            //             $ot_to = strtotime($applied["time_to"]);
+                                        
+                            //             $ot_hours = abs($ot_to - $ot_from)/(60*60);
+                            //             if ($applied["ot_type"] == "ROT") {
+                            //                 $timekeeping_data["regular_ot"] = ($timekeeping_data["regular_ot"] ?? 0) + $ot_hours;
+                            //             } elseif ($applied["ot_type"] == "SOT") {
+                            //                 $timekeeping_data["special_ot"] = ($timekeeping_data["special_ot"] ?? 0) + $ot_hours;
+                            //             } elseif ($applied["ot_type"] == "NDOT") {
+                            //                 $timekeeping_data["nd_ot"] = ($timekeeping_data["nd_ot"] ?? 0) + $ot_hours;
+                            //             }elseif ($applied["ot_type"] == "RD") {
+                            //                 if ($ot_hours >= 5) {
+                            //                     $ot_hours -= 1;
+                            //                 }
+                            //                 $ot_hours = min($ot_hours, 8); // cap at 8 hrs
+                            //                 $timekeeping_data["rd"] = ($timekeeping_data["rd"] ?? 0) + $ot_hours;
+                            //             }elseif ($applied["ot_type"] == "RDOT") {
+                            //                 $timekeeping_data["rd_ot"] = ($timekeeping_data["rd_ot"] ?? 0) + $ot_hours;
+                            //             }elseif ($applied["ot_type"] == "SH_OT") {
+                            //                 $timekeeping_data["sh_ot"] = ($timekeeping_data["sh_ot"] ?? 0) + $ot_hours;
+                            //             }elseif ($applied["ot_type"] == "RH_OT") {
+                            //                 $timekeeping_data["rh_ot"] = ($timekeeping_data["rh_ot"] ?? 0) + $ot_hours;
+                            //             }elseif ($applied["ot_type"] == "RD_RH_OT") {
+                            //                 $timekeeping_data["rd_ot_rh"] = ($timekeeping_data["rd_ot_rh"] ?? 0) + $ot_hours;
+                            //             }elseif ($applied["ot_type"] == "RD_SH_OT") {
+                            //                 $timekeeping_data["rd_ot_sh"] = ($timekeeping_data["rd_ot_sh"] ?? 0) + $ot_hours;
+                            //             }
+                            //         }
+                            //     }
+                            // }
+                        }
+                        if ($process_timecard) {
                             //CHECK TIMECARD
                             //GET SCHEDULE
                             // default by daily_sched , employee, position, designation, department, branch, company
@@ -2667,13 +2725,22 @@ class payrollController extends Controller
                                                 $timekeeping_data["regular_ot"] = 8;
 		                                        $timekeeping_data["nd_ot"] = 4;
                                             }
+                                            //dito kapag 10am na pumasok dapat half day nalang
+                                            if($req_am_in == '08:00:00'){
+                                                $actual_time_in = date("H:i:s", strtotime($timecard_data->AM_IN));
+                                                if($work_hours > 0 && ($actual_time_in >= '10:00:00' && $actual_time_in <= '11:59:00')){
+                                                    if($emp_data["salary_type"] == "DAILY"){
+                                                        $work_hours = 4;
+                                                    }
+                                                }
+                                            }
                                             // $timekeeping_data["regular_work"] = $work_hours;
                                             if ($worked_other_branch) {
                                                 $timekeeping_data["regular_work"] = 0;
                                             } else {
                                                 $timekeeping_data["regular_work"] = $work_hours;
                                             }
-                                            $timekeeping_data["night_diff"] = $night_diff;
+                                            $timekeeping_data["night_diff"] = 0;
                                             
                                             
     
@@ -2718,32 +2785,82 @@ class payrollController extends Controller
                                                 }
                                                 //dd($undertime);
                                                 
-                                                if($late > 0){
-                                                    if($req_am_in == '08:00:00'){
-                                                        $actual_time_in = date("H:i:s", strtotime($timecard_data->AM_IN));
-                                                        if($actual_time_in >= '08:16:00' && $actual_time_in <= '08:59:00'){
-                                                            $late = 60.00; //1 hr late
-                                                        }elseif($actual_time_in >= '09:00:00' && $actual_time_in <= '09:59:00'){
-                                                            $late = 120.00; //2 hr late
-                                                        }elseif($actual_time_in >= '10:00:00' && $actual_time_in <= '10:59:00'){
-                                                            $late = 180.00; //3 hr late
-                                                        }
-                                                    }
-                                                }
+                                                // if($late > 0){
+                                                //     if($req_am_in == '08:00:00'){
+                                                //         $actual_time_in = date("H:i:s", strtotime($timecard_data->AM_IN));
+                                                //         if($actual_time_in >= '08:16:00' && $actual_time_in <= '08:59:00'){
+                                                //             $late = 60.00; //1 hr late
+                                                //         }elseif($actual_time_in >= '09:00:00' && $actual_time_in <= '09:59:00'){
+                                                //             $late = 120.00; //2 hr late
+                                                //         }elseif($actual_time_in >= '10:00:00' && $actual_time_in <= '10:59:00'){
+                                                //             $late = 180.00; //3 hr late
+                                                //         }
+                                                //     }
+                                                // }
 
                                                 if($timekeeping_data["regular_work"] == 0){
                                                     $late = 0;
                                                     $undertime = 0;
                                                 }
-                                            
+                                                //ABSENT kapag hindi 5 ang raw logs
+                                                $emp_raw_logs_count = DB::connection("intra_payroll")
+                                                ->table("tbl_raw_logs")
+                                                ->where("biometric_id", $emp_data["bio_id"])
+                                                ->whereDate("logs", $cur_date)
+                                                ->count();
+                                                $emp_hr_group = $emp_data["hr_group"]; //site maxtel at site pm comment muna
+                                                // if($emp_raw_logs_count < 5 && ($emp_hr_group == "group_c" || $emp_hr_group == "group_e")){
+                                                //     $absent = true;
+                                                // }
+                                                //end absent condition
+                                                //absent kapag wala sa listed location
+                                                $has_manual_timecard = DB::connection("intra_payroll")
+                                                ->table("tbl_timecard")
+                                                ->where("emp_id", $emp_id)
+                                                ->whereDate("target_date", $cur_date)
+                                                ->where("is_manual", 1)
+                                                ->exists();
+                                                if (!$has_manual_timecard) {
+                                                    $raw_log_locations = DB::connection("intra_payroll")
+                                                        ->table("tbl_raw_logs")
+                                                        ->where("biometric_id", $emp_data["bio_id"])
+                                                        ->whereDate("logs", $cur_date)
+                                                        ->pluck("location"); // get all locations
+
+                                                    $tbl_listed_locations = DB::connection("intra_payroll")
+                                                        ->table("tbl_listed_locations")
+                                                        ->whereIn("location", $raw_log_locations)
+                                                        ->count();
+
+                                                    if ($tbl_listed_locations == 0) {
+                                                        $absent = true;
+                                                    }
+                                                } 
+                                                if($late < 1){
+                                                    $late = 0;
+                                                }
                                                 if($absent == false){
                                                     $timekeeping_data["lates"] = $late;
                                                     $timekeeping_data["undertime"] = $undertime;
                                                     $timekeeping_data["absent"] = 0;
+                                                    //dito kapag 10am na pumasok dapat half day nalang
+                                                    if($req_am_in == '08:00:00'){
+                                                        $actual_time_in = date("H:i:s", strtotime($timecard_data->AM_IN));
+                                                        if($work_hours > 0 && ($actual_time_in >= '10:00:00' && $actual_time_in <= '11:59:00')){
+                                                            if($emp_data["salary_type"] == "MONTHLY"){
+                                                                $timekeeping_data['absent'] = 4;
+                                                            }
+                                                            $timekeeping_data["lates"] = 0;
+                                                        }
+                                                    }
                                                 }else{
                                                     $timekeeping_data['absent'] = $work_hours;
                                                     $timekeeping_data["lates"] = 0;
                                                     $timekeeping_data["undertime"] = 0;
+                                                    if($emp_data["salary_type"] == "DAILY"){
+                                                        $timekeeping_data['absent'] = 0;
+                                                        $timekeeping_data["regular_work"] = 0;
+                                                    }
                                                 }
     
                                             
@@ -2782,7 +2899,7 @@ class payrollController extends Controller
                                                 return $ot["date_target"] == $cur_date;
                                             });
                                             foreach ($daily_applied_ot as $applied) {
-                                                if($timecard_data->AM_IN != null || $timecard_data->PM_OUT != null || $timecard_data->AM_IN != "" || $timecard_data->OT_OUT != "" ){
+                                                if(($timecard_data->AM_IN != null || $timecard_data->PM_OUT != null || $timecard_data->AM_IN != "" || $timecard_data->OT_OUT != "") && $worked_other_branch == false){
                                                     $ot_from = strtotime($applied["time_from"]);
                                                     $ot_to = strtotime($applied["time_to"]);
                                                     
@@ -2790,19 +2907,46 @@ class payrollController extends Controller
                                                     $act_out = strtotime($timecard_data->PM_OUT);
                                                     $ot_hours = abs($ot_to - $ot_from)/(60*60);
                                                     if ($applied["ot_type"] == "ROT") {
-                                                        // Actual OT starts after scheduled 5pm
-                                                        $actual_ot_start = $pm_out_req;        // 17:00:00
-                                                        $actual_ot_end   = $act_out;           // actual PM_OUT (ex: 19:00:00)
-                                                        // Find overlap between requested OT and actual OT
-                                                        $start = max($ot_from, $actual_ot_start);
-                                                        $end   = min($ot_to, $actual_ot_end);
-                                                        if ($end > $start) {
-                                                            $rot_hours = ($end - $start) / 3600;
-                                                        } else {
-                                                            $rot_hours = 0;
+                                                        // $actual_ot_start = $pm_out_req;        // 17:00:00
+                                                        // $actual_ot_end   = $act_out;           // actual PM_OUT (ex: 19:00:00)
+                                                        // $start = max($ot_from, $actual_ot_start);
+                                                        // $end   = min($ot_to, $actual_ot_end);
+                                                        // if ($end > $start) {
+                                                        //     $rot_hours = ($end - $start) / 3600;
+                                                        // } else {
+                                                        //     $rot_hours = 0;
+                                                        // }
+                                                        // $timekeeping_data["regular_ot"] =
+                                                        //     ($timekeeping_data["regular_ot"] ?? 0) + $rot_hours;
+                                                        // continue;
+                                                         $rot_hours = 0;
+                                                        // =========================
+                                                        // MORNING OT (before shift)
+                                                        // =========================
+                                                        if ($ot_to <= $am_in_req) {
+
+                                                            $start = max($ot_from, $act_in);
+                                                            $end   = min($ot_to, $am_in_req);
+
+                                                            if ($end > $start) {
+                                                                $rot_hours += ($end - $start) / 3600;
+                                                            }
+                                                        }
+                                                        // =========================
+                                                        // EVENING OT (after shift)
+                                                        // =========================
+                                                        if ($ot_from >= $pm_out_req) {
+
+                                                            $start = max($ot_from, $pm_out_req);
+                                                            $end   = min($ot_to, $act_out);
+
+                                                            if ($end > $start) {
+                                                                $rot_hours += ($end - $start) / 3600;
+                                                            }
                                                         }
                                                         $timekeeping_data["regular_ot"] =
                                                             ($timekeeping_data["regular_ot"] ?? 0) + $rot_hours;
+
                                                         continue;
                                                     }
                                                     // if ($applied["ot_type"] == "ROT") {
@@ -2930,7 +3074,7 @@ class payrollController extends Controller
                                             $work_hours = $required_hours - $break_hours;
                                             $timekeeping_data["regular_work"] = $work_hours;
                                             $night_diff = 0;
-                                            $timekeeping_data["night_diff"] = $night_diff;
+                                            $timekeeping_data["night_diff"] = 0;
                                             
                                             
                                              $late = 0;
@@ -2942,7 +3086,9 @@ class payrollController extends Controller
                                              	$undertime = 0;
                                              }
                                              //dd($undertime);
-                                             
+                                                if($late < 1){
+                                                    $late = 0;
+                                                }
                                                 if($absent == false){
                                                     $timekeeping_data["lates"] = $late;
                                                     $timekeeping_data["undertime"] = $undertime;
@@ -3030,11 +3176,14 @@ class payrollController extends Controller
                                         $nd_end = strtotime($cur_date . " +1 day 06:00:00");
                                         $nd_overlap = max(0, min($actual_pm_out, $nd_end) - max($actual_am_in, $nd_start));
                                         $night_diff = round($nd_overlap / 3600, 2);
-                                        $timekeeping_data["regular_work"] = $worked_hours;
+                                        if($worked_other_branch) {
+                                            $worked_hours = 0;
+                                        }
+                                        $timekeeping_data["regular_work"] = 0;
                                         //$timekeeping_data["rd"] = $worked_hours;
                                         // $timekeeping_data["lates"] = round($late, 2);
                                         // $timekeeping_data["undertime"] = round($undertime, 2);
-                                        $timekeeping_data["night_diff"] = $night_diff;
+                                        $timekeeping_data["night_diff"] = 0;
                                         $daily_applied_ot = array_filter($applied_ot, function($ot) use ($cur_date) {
                                             return $ot["date_target"] == $cur_date;
                                         });
@@ -3097,7 +3246,7 @@ class payrollController extends Controller
                                 $regular_work = 0;
                                 if($emp_data["salary_type"] == "MONTHLY"){
                                     if($timecard_data != null){
-                                        if($timecard_data->AM_IN != null || $timecard_data->PM_OUT != "" || $timecard_data->PM_OUT != null || $timecard_data->AM_IN != "" ){
+                                        if($timecard_data->AM_IN != "" && $timecard_data->PM_OUT != ""){
                                             $regular_holiday = $daily_divisor;
                                             $regular_work = $daily_divisor;
                                             if($timekeeping_data["rd"] > 0){
@@ -3109,7 +3258,7 @@ class payrollController extends Controller
                                     }
                                 }else{
                                     if($timecard_data != null){
-                                        if($timecard_data->AM_IN != null || $timecard_data->PM_OUT != "" || $timecard_data->PM_OUT != null || $timecard_data->AM_IN != "" ){
+                                        if($timecard_data->AM_IN != "" && $timecard_data->PM_OUT != ""){
                                             $regular_holiday = $daily_divisor;
                                             $regular_work = $daily_divisor;
                                             if($timekeeping_data["rd"] > 0){
@@ -3123,22 +3272,57 @@ class payrollController extends Controller
                                 if($timekeeping_data['absent'] > 0){
                                     $timekeeping_data['absent'] = 0;
                                 }
-                                if($req_am_in != "RD" && ($timecard_data_yesterday != null || $timecard_data_yesterday != "" )){
-                                    $regular_work = $daily_divisor;
+                                // if($req_am_in != "RD" && ($timecard_data_yesterday != null || $timecard_data_yesterday != "" )){
+                                //     $regular_work = $daily_divisor;
+                                // }
+                                $check_date = $cur_date;
+
+                                do {
+                                    $check_date = date('Y-m-d', strtotime($check_date . ' -1 day'));
+
+                                    $is_holiday = DB::connection("intra_payroll")->table("tbl_holiday")
+                                        ->where("holiday_date", $check_date)
+                                        ->exists();
+
+                                } while ($is_holiday);
+
+
+                                //Check if employee worked or was on approved leave on that date
+
+                                $timecard_data = DB::connection("intra_payroll")->table("tbl_timecard")
+                                    ->where("emp_id", $emp_id)
+                                    ->where("target_date", $check_date)
+                                    ->first();
+
+                                //Final condition
+                                if (!empty($timecard_data)) {
+                                    if($timecard_data->AM_IN != "" && $timecard_data->PM_OUT != "" && $emp_data["hr_group"] != "group_c"){
+                                        $regular_work = $daily_divisor;
+                                    }
+                                }
+
+                                if($emp_data["hr_group"] == "group_c"){
+                                    $regular_holiday = 0;
                                 }
 
                                 if($worked_other_branch) {
                                     $regular_work = 0;
                                 }
                                
-                                $timekeeping_data['regular_work'] = $regular_work;
-                                $timekeeping_data["regular_holiday"] = 0;
+                                if($emp_data["salary_type"] == "DAILY"){
+                                    $timekeeping_data['regular_work'] = $regular_work;
+                                    $timekeeping_data["regular_holiday"] = $regular_holiday;
+                                }else{
+                                    $timekeeping_data['regular_work'] = $regular_work; 
+                                    $timekeeping_data["regular_holiday"] = 0; 
+                                }
+                                
                             }else{
                                 $regular_work = 0;
                                 $special_holiday = 0;
                                 if($emp_data["salary_type"] == "MONTHLY"){
                                     if($timecard_data != null){
-                                        if($timecard_data->AM_IN != null || $timecard_data->PM_OUT != "" || $timecard_data->PM_OUT != null || $timecard_data->AM_IN != "" ){
+                                        if($timecard_data->AM_IN != "" && $timecard_data->PM_OUT != ""){
                                             $special_holiday = $daily_divisor;
                                             $regular_work = $daily_divisor;
                                             if($timekeeping_data["rd"] > 0){
@@ -3150,7 +3334,7 @@ class payrollController extends Controller
                                     }
                                 }else{
                                     if($timecard_data != null){
-                                        if($timecard_data->AM_IN != null || $timecard_data->PM_OUT != "" || $timecard_data->PM_OUT != null || $timecard_data->AM_IN != "" ){
+                                        if($timecard_data->AM_IN != "" && $timecard_data->PM_OUT != ""){
                                             $special_holiday = $daily_divisor;
                                             $regular_work = $daily_divisor;
                                             if($timekeeping_data["rd"] > 0){
@@ -3168,7 +3352,7 @@ class payrollController extends Controller
                                 if($worked_other_branch) {
                                     $regular_work = 0;
                                 }
-                               
+
                                 $timekeeping_data['regular_work'] = $regular_work;
                                 $timekeeping_data["special_holiday"] = 0;
                                 
@@ -3759,6 +3943,8 @@ class payrollController extends Controller
                                 data-sss='".$row->sss."'
                                 data-ph='".$row->ph."'
                                 data-hdmf='".$row->hdmf."'
+                                data-rice_allowance='".$row->rice_allowance."'
+                                data-rice_allowance_amount='".$row->rice_allowance_amount."'
                                 data-date_start='".$row->cover_from."'
                                 data-date_end='".$row->cover_to."'
                                 data-process_type='".$row->process_type."'
@@ -3815,6 +4001,8 @@ class payrollController extends Controller
                                     data-sss='".$row->sss."'
                                     data-ph='".$row->ph."'
                                     data-hdmf='".$row->hdmf."'
+                                    data-rice_allowance='".$row->rice_allowance."'
+                                    data-rice_allowance_amount='".$row->rice_allowance_amount."'
                                     data-date_start='".$row->cover_from."'
                                     data-date_end='".$row->cover_to."'
                                     data-process_type='".$row->process_type."'
@@ -3878,6 +4066,24 @@ class payrollController extends Controller
                                                 
                                             }
                                             if($row->payroll_status == "COMPUTED"){
+                                                // count pending (ADMIN only visible)
+                                                $count = 0;
+                                                if($role_id == 1){
+                                                    $count = DB::connection("intra_payroll")
+                                                        ->table("tbl_payroll_income_approval")
+                                                        ->where("status", "PENDING")
+                                                        ->where("payroll_id", $row->id)
+                                                        ->count();
+                                                }
+
+                                                $badge = $count > 0 ? "<span class='badge badge-danger ml-1'>".$count."</span>" : "";
+
+                                                $btn .= "<br>
+                                                <button 
+                                                    class='btn btn-warning btn-sm w-100 mb-1'
+                                                    onclick='open_credit_adj_modal(".$row->id.")'>
+                                                    Credit Adjustment $badge
+                                                </button>";
                                                 $btn .= "<br><button onclick='push_for_approval(".$row->id.")' class='btn btn-sm btn-info mb-1 w-100' 
                                                 > Post for Approval </button>";
                                                 $btn .= "<br><button  onclick='export_payroll($row->id)' class='export_payroll btn btn-success btn-sm w-100 mb-1'>Payroll Report</button>";
@@ -3958,6 +4164,11 @@ class payrollController extends Controller
                         "sss" => $request->sss,
                         "ph" => $request->ph,
                         "hdmf" => $request->hdmf,
+                        "rice_allowance" => $request->rice_allowance,
+                        "rice_allowance_amount" =>
+                            $request->rice_allowance == 1
+                                ? ($request->rice_allowance_amount ?: 1500)
+                                : 0,
                         "hr_group" =>  $request->hr_group
                     );
                     DB::connection("intra_payroll")->table("tbl_payroll")
@@ -3983,6 +4194,11 @@ class payrollController extends Controller
                     "sss" => $request->sss,
                     "ph" => $request->ph,
                     "hdmf" => $request->hdmf,
+                    "rice_allowance" => $request->rice_allowance,
+                    "rice_allowance_amount" =>
+                            $request->rice_allowance == 1
+                                ? ($request->rice_allowance_amount ?: 1500)
+                                : 0,
                     "hr_group" =>  $request->hr_group
                 );
                 DB::connection("intra_payroll")->table("tbl_payroll")
@@ -4282,5 +4498,185 @@ class payrollController extends Controller
                 ->insert($inc_row);
         }
         return back()->with('success', 'Excel uploaded successfully.');
+    }
+    public function store_credit_adj(Request $request){
+
+        if(Auth::user()->role_id == 1){
+            // ADMIN → direct save
+            DB::connection("intra_payroll")->table("tbl_payroll_income")->insert([
+                "payroll_id" => $request->payroll_id,
+                "emp_id" => $request->emp_id,
+                "type" => "Credit Adj",
+                "amount" => $request->amount,
+                "user_id" => Auth::user()->id,
+                "date_created" => now()
+            ]);
+        }else{
+            // USER → pending
+            DB::connection("intra_payroll")->table("tbl_payroll_income_approval")->insert([
+                "payroll_id" => $request->payroll_id,
+                "emp_id" => $request->emp_id,
+                "amount" => $request->amount,
+                "type" => "Credit Adj",
+                "status" => "PENDING",
+                "requested_by" => Auth::user()->id,
+                "date_created" => now()
+            ]);
+        }
+
+        return "saved";
+    }
+
+    public function list_credit_adj(Request $request){
+
+        $role_id = Auth::user()->role_id;
+
+        $data = DB::connection("intra_payroll")
+            ->table("tbl_payroll_income_approval as a")
+            ->leftJoin("tbl_employee as e", "e.id", "=", "a.emp_id")
+            ->leftJoin("users as u", "u.id", "=", "a.requested_by")
+            ->where("a.payroll_id", $request->payroll_id)
+            ->select(
+                "a.*",
+                "e.first_name",
+                "e.last_name",
+                "u.name as requested_name"
+            )
+            ->get();
+
+        return Datatables::of($data)
+
+            ->addColumn('name', function($row){
+                return $row->last_name.", ".$row->first_name;
+            })
+
+            ->addColumn('requested_by', function($row){
+                return $row->requested_name ?? "-";
+            })
+
+            ->addColumn('status', function($row){
+                if($row->status == "PENDING"){
+                    return "<span class='badge badge-warning'>PENDING</span>";
+                }elseif($row->status == "APPROVED"){
+                    return "<span class='badge badge-success'>APPROVED</span>";
+                }else{
+                    return "<span class='badge badge-danger'>REJECTED</span>";
+                }
+            })
+
+           ->addColumn('action', function($row) use ($role_id){
+
+                // ADMIN → can approve/reject
+                if($role_id == 1 && $row->status == "PENDING"){
+                    return "
+                        <button onclick='approve_credit(\"pending_".$row->id."\")' class='btn btn-success btn-sm'>Approve</button>
+                        <button onclick='reject_credit(\"pending_".$row->id."\")' class='btn btn-danger btn-sm'>Reject</button>
+                    ";
+                }
+
+                // NON-ADMIN → show status message
+                if($role_id != 1 && $row->status == "PENDING"){
+                    return "<span class='badge badge-info'>For Admin Approval</span>";
+                }
+
+                // APPROVED / REJECTED 
+                if($row->status == "APPROVED"){
+                    return "<span class='badge badge-success'>Approved</span>";
+                }
+
+                if($row->status == "REJECTED"){
+                    return "<span class='badge badge-danger'>Rejected</span>";
+                }
+
+                return "-";
+            })
+
+            ->rawColumns(['status','action'])
+            ->make(true);
+    }
+
+    public function approve_credit_adj(Request $request){
+
+        $approval = DB::connection("intra_payroll")
+            ->table("tbl_payroll_income_approval")
+            ->where("id",$request->id)
+            ->first();
+
+        DB::beginTransaction();
+        try{
+
+            DB::connection("intra_payroll")->table("tbl_payroll_income")->insert([
+                "payroll_id" => $approval->payroll_id,
+                "emp_id" => $approval->emp_id,
+                "type" => "Credit Adj",
+                "amount" => $approval->amount,
+                "user_id" => $approval->requested_by,
+                "date_created" => now()
+            ]);
+
+            DB::connection("intra_payroll")->table("tbl_payroll_income_approval")
+                ->where("id",$approval->id)
+                ->update([
+                    "status" => "APPROVED",
+                    "approved_by" => Auth::user()->id,
+                    "date_approved" => now()
+                ]);
+
+            DB::commit();
+            return "approved";
+
+        }catch(\Throwable $e){
+            DB::rollback();
+            return $e->getMessage();
+        }
+    }
+    public function reject_credit_adj(Request $request){
+
+        DB::connection("intra_payroll")
+            ->table("tbl_payroll_income_approval")
+            ->where("id",$request->id)
+            ->update([
+                "status" => "REJECTED",
+                "approved_by" => Auth::user()->id,
+                "date_approved" => now()
+            ]);
+
+        return "rejected";
+    }
+
+    public function load_payroll_employees(Request $request){
+        // get payroll record
+        $payroll = DB::connection("intra_payroll")
+            ->table("tbl_payroll")
+            ->where("id", $request->payroll_id)
+            ->first();
+
+        if(!$payroll){
+            return response()->json([]);
+        }
+
+        // parse employee string: |211|;|212|;|239|
+        $employee_ids = [];
+
+        if(!empty($payroll->employee)){
+            $raw_ids = explode(';', $payroll->employee);
+
+            foreach($raw_ids as $val){
+                $clean_id = str_replace('|', '', $val);
+                if(is_numeric($clean_id)){
+                    $employee_ids[] = $clean_id;
+                }
+            }
+        }
+
+        // fetch only those employees
+        $employee_list = DB::connection("intra_payroll")
+            ->table("tbl_employee")
+            ->where('is_active', 1)
+            ->whereIn('id', $employee_ids)
+            ->orderBy('last_name')
+            ->get();
+
+        return response()->json($employee_list);
     }
 }

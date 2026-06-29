@@ -212,8 +212,21 @@ class employeeController extends Controller
 
 
             //UPDATE EMPLOYEE
-            DB::connection("intra_payroll")->table("tbl_employee")
-            ->insert($insert_array);
+            // DB::connection("intra_payroll")->table("tbl_employee")
+            // ->insert($insert_array);
+            if(Auth::user()->role_id == 1){
+                // ADMIN → direct insert
+                DB::table("tbl_employee")->insert($insert_array);
+            } else {
+                DB::table("tbl_employee_approval")->insert([
+                    "emp_id" => null,
+                    "action_type" => "ADD",
+                    "payload" => json_encode($insert_array),
+                    "status" => "PENDING",
+                    "requested_by" => Auth::user()->id,
+                    "date_requested" => now()
+                ]);
+            }
 
             DB::commit();
 
@@ -318,8 +331,135 @@ class employeeController extends Controller
         }
     }
 
+    public function create_user_account(Request $request)
+    {
+        DB::beginTransaction();
 
-    public function create_user_account(Request $request){
+        try {
+
+            $emp_user_id = DB::connection("intra_payroll")
+                ->table("tbl_employee")
+                ->where("id", $request->id)
+                ->value("user_id");
+
+            // CHECK IF USER STILL EXISTS
+            $existing_user = null;
+
+            if (!empty($emp_user_id) && $emp_user_id != 0) {
+                $existing_user = DB::connection("intra_payroll")
+                    ->table("users")
+                    ->where("id", $emp_user_id)
+                    ->first();
+            }
+
+            $email = $request->user_name;
+
+            // CHECK IF EMAIL FORMAT
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $email = $email . '@mail.com';
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | CREATE NEW ACCOUNT
+            |--------------------------------------------------------------------------
+            | IF:
+            | 1. user_id is 0
+            | OR
+            | 2. user_id exists in tbl_employee but user record was deleted
+            |--------------------------------------------------------------------------
+            */
+            if ($emp_user_id == 0 || $existing_user == null) {
+
+                // CHECK DUPLICATE USERNAME
+                $check = DB::connection("intra_payroll")
+                    ->table("users")
+                    ->where("username", $request->user_name)
+                    ->first();
+
+                if ($check != null) {
+                    return json_encode("duplicate");
+                }
+
+                $user_id = DB::connection("intra_payroll")
+                    ->table("users")
+                    ->insertGetId([
+                        "name" => $request->name,
+                        "firstName" => $request->first_name,
+                        "middleName" => $request->middle_name,
+                        "lastName" => $request->last_name,
+                        "extName" => $request->ext_name,
+                        "position" => $request->position,
+                        "role_id" => $request->role_id,
+                        "email" => $email,
+                        "username" => $request->user_name,
+                        "password" => Hash::make($request->password)
+                    ]);
+
+                // UPDATE EMPLOYEE USER ID
+                DB::connection("intra_payroll")
+                    ->table("tbl_employee")
+                    ->where("id", $request->id)
+                    ->update([
+                        "user_id" => $user_id
+                    ]);
+
+            } else {
+
+                /*
+                |--------------------------------------------------------------------------
+                | UPDATE EXISTING ACCOUNT
+                |--------------------------------------------------------------------------
+                */
+
+                // CHECK IF USERNAME BELONGS TO OTHER USER
+                $check = DB::connection("intra_payroll")
+                    ->table("users")
+                    ->where("username", $request->user_name)
+                    ->where("id", "!=", $emp_user_id)
+                    ->first();
+
+                if ($check != null) {
+                    return json_encode("duplicate");
+                }
+
+                $array_update = [
+                    "name" => $request->name,
+                    "firstName" => $request->first_name,
+                    "middleName" => $request->middle_name,
+                    "lastName" => $request->last_name,
+                    "extName" => $request->ext_name,
+                    "position" => $request->position,
+                    "role_id" => $request->role_id,
+                    "email" => $email,
+                    "username" => $request->user_name,
+                ];
+
+                // ONLY UPDATE PASSWORD IF NOT EMPTY
+                if (!empty($request->password)) {
+                    $array_update["password"] = Hash::make($request->password);
+                }
+
+                DB::connection("intra_payroll")
+                    ->table("users")
+                    ->where("id", $emp_user_id)
+                    ->update($array_update);
+            }
+
+            DB::commit();
+
+            return json_encode("saved");
+
+        } catch (\Throwable $th) {
+
+            DB::rollback();
+
+            return json_encode($th->getMessage());
+        }
+    }
+
+
+    public function create_user_accountxxx(Request $request){
         DB::beginTransaction();
         try {
 
@@ -497,60 +637,161 @@ class employeeController extends Controller
 
                 $data = collect($data);
 
-                return Datatables::of($data)
-                ->addColumn('name', function($row){
+                 // GET PENDING REQUESTS
+                $pending = DB::connection("intra_payroll")
+                    ->table("tbl_employee_approval")
+                    ->where("status", "PENDING")
+                    ->get();
 
-                    $view = '<div class="table-img">';
-                    $view .= '<a>';
-                 
-                    $view .= '<img src="'.asset_with_env(str_replace('public/', '', $row->profile_picture)).'" alt="profile" class="img-table" onerror="this.src='."'".asset_with_env('upload_images/emp_pic/avatar-user.jpg')."'".';" /><label>';
-                    // $imgPath = str_replace('public/', '', $row->profile_picture);
-                    // $cacheBuster = '?v=' . strtotime($row->date_updated ?? now()); // use updated_at or fallback to now()
-                    // $view .= '<img src="'.asset_with_env($imgPath.$cacheBuster).'" alt="profile" class="img-table" onerror="this.src='."'".asset_with_env('upload_images/emp_pic/avatar-user.jpg')."'".';" /><label>';
-                    $view .= $row->emp_code .'<br>';
-                    $view .= $row->last_name.", ".$row->first_name." ".$row->middle_name." ".$row->ext_name;
+                // MAP PENDING DATA TO MATCH TABLE STRUCTURE
+                $pending = $pending->map(function($item){
+
+                    // DEFAULT EMPTY
+                    $data = [];
+
+                    // ADD → use payload
+                    if($item->action_type == "ADD"){
+                        $data = $item->payload ? json_decode($item->payload, true) : [];
+                    }
+
+                    // DELETE → get actual employee data
+                    if($item->action_type == "DELETE" && $item->emp_id){
+                        $emp = DB::connection("intra_payroll")
+                            ->table("tbl_employee")
+                            ->where("id", $item->emp_id)
+                            ->first();
+
+                        if($emp){
+                            $data = [
+                                "emp_code" => $emp->emp_code,
+                                "last_name" => $emp->last_name,
+                                "first_name" => $emp->first_name,
+                                "middle_name" => $emp->middle_name,
+                                "ext_name" => $emp->ext_name,
+                                "position_id" => $emp->position_id,
+                                "department" => $emp->department,
+                                "branch_id" => $emp->branch_id,
+                                "designation" => $emp->designation,
+                                "profile_picture" => $emp->profile_picture
+                            ];
+                        }
+                    }
+
+                    return (object)[
+                        "id" => $item->id,
+                        "emp_code" => $data['emp_code'] ?? '',
+                        "last_name" => $data['last_name'] ?? '',
+                        "first_name" => $data['first_name'] ?? '',
+                        "middle_name" => $data['middle_name'] ?? '',
+                        "ext_name" => $data['ext_name'] ?? '',
+                        "position_id" => $data['position_id'] ?? null,
+                        "department" => $data['department'] ?? null,
+                        "branch_id" => $data['branch_id'] ?? null,
+                        "designation" => $data['designation'] ?? null,
+                        "profile_picture" => $data['profile_picture'] ?? null,
+                        "is_pending" => true,
+                        "pending_action" => $item->action_type
+                    ];
+                });
+
+                // MERGE ACTIVE + PENDING
+                $data = $data->map(function($item){
+                    $item->is_pending = false;
+                    return $item;
+                })->merge($pending);
+
+                $data = $data->sortBy(function($item){
+
+                    // PRIORITY 1: Pending first
+                    $priority = (isset($item->is_pending) && $item->is_pending) ? 0 : 1;
+
+                    // PRIORITY 2: Name sorting
+                    $name = ($item->last_name ?? '').' '.($item->first_name ?? '');
+
+                    return $priority.'_'.$name;
+
+                })->values(); // reset index
+
+                return Datatables::of($data)
+                 ->addColumn('name', function($row){
+
+                    $view = '<div class="table-img"><a>';
+
+                    $img = "";
+                    if(isset($row->profile_picture) && !empty($row->profile_picture)){
+                        $img = asset_with_env(str_replace('public/', '', $row->profile_picture));
+                    } else {
+                        $img = asset_with_env('upload_images/emp_pic/avatar-user.jpg');
+                    }
+
+                    $view .= '<img src="'.$img.'" class="img-table" />';
                     
+                    $view .= '<label>';
+                    $view .= ($row->emp_code ?? '-') . '<br>';
+                    $view .= ($row->last_name ?? '').", ".($row->first_name ?? '')." ".($row->middle_name ?? '')." ".($row->ext_name ?? '');
                     $view .= '</label>';
+
                     $view .= '</a></div>';
-                    
 
                     return $view;
                 })
                 ->addColumn('position', function($row) use ($position){
-                    $data = $this->search_multi_array($position, "id", $row->position_id);
-                    if($data != null){
-                        return $data["name"];
-                    }else{
-                        return "-";
-                    }
-                    
-                 })
-                ->addColumn('department', function($row) use ($department) {
-                    $data = $this->search_multi_array($department, "id", $row->department);
-                    if($data != null){
-                        return $data["department"];
-                    }else{
-                        return "-";
-                    }
-                 })
-                 ->addColumn('branch', function($row) use ($branch){
-                    $data = $this->search_multi_array($branch, "id", $row->branch_id);
-                    if($data != null){
-                        return $data["branch"];
-                    }else{
+                    if(isset($row->is_pending) && $row->is_pending){
                         return "-";
                     }
 
+                    $data = $this->search_multi_array($position, "id", $row->position_id);
+                    return $data ? $data["name"] : "-";
+                    
                  })
-                 ->addColumn('designation', function($row) use($designation){
-                    $data = $this->search_multi_array($designation, "id", $row->designation);
-                    if($data != null){
-                        return $data["name"];
-                    }else{
+                ->addColumn('department', function($row) use ($department) {
+                    if(isset($row->is_pending) && $row->is_pending){
                         return "-";
                     }
+
+                    $data = $this->search_multi_array($department, "id", $row->department);
+                    return $data ? $data["department"] : "-";
                  })
-                 ->addColumn('action', function($row) use ($page_permission){
+                 ->addColumn('branch', function($row) use ($branch){
+                    if(isset($row->is_pending) && $row->is_pending){
+                        return "-";
+                    }
+
+                    $data = $this->search_multi_array($branch, "id", $row->branch_id);
+                    return $data ? $data["branch"] : "-";
+
+                 })
+                 ->addColumn('designation', function($row) use($designation){
+                    if(isset($row->is_pending) && $row->is_pending){
+                        return "-";
+                    }
+
+                    $data = $this->search_multi_array($designation, "id", $row->designation);
+                    return $data ? $data["name"] : "-";
+                 })
+                ->addColumn('status', function($row){
+                        if(isset($row->is_pending) && $row->is_pending){
+                            return "<span class='badge badge-warning'>PENDING ".$row->pending_action."</span>";
+                        }
+                        if($row->is_active == 1){
+                            return "<span class='badge badge-success'>ACTIVE</span>";
+                        }else{
+                            return "<span class='badge badge-danger'>RESIGN</span>";
+                        }
+                    })
+                 ->addColumn('action', function($row) use ($page_permission, $role_id){
+                     //PENDING ROW
+                    if(isset($row->is_pending) && $row->is_pending){
+
+                        if($role_id == 1){ // ADMIN
+                            return "
+                                <button class='btn btn-success btn-sm' onclick='approve(".$row->id.")'>Approve</button>
+                                <button class='btn btn-danger btn-sm' onclick='reject(".$row->id.")'>Reject</button>
+                            ";
+                        }
+
+                        return "<span class='badge badge-secondary'>Waiting Approval</span>";
+                    }
                      // add delete
                      $btn = "";
                      if(preg_match("/U/i", $page_permission)){
@@ -568,7 +809,7 @@ class employeeController extends Controller
                          return $btn;
                  })
 
-                 ->rawColumns(['name','action'])
+                 ->rawColumns(['name','action','status'])
                 ->make(true);
     }
 
@@ -1267,9 +1508,25 @@ class employeeController extends Controller
              
 
 
-                DB::connection("intra_payroll")->table($tbl)
-                ->where("id", $request->id)
-                ->delete();
+                if($type == "employee"){
+                    if(Auth::user()->role_id == 1){
+                        // ADMIN → direct delete
+                        DB::table($tbl)->where("id", $request->id)->delete();
+                    } else {
+                        DB::table("tbl_employee_approval")->insert([
+                            "emp_id" => $request->id,
+                            "action_type" => "DELETE",
+                            "payload" => null,
+                            "status" => "PENDING",
+                            "requested_by" => Auth::user()->id,
+                            "date_requested" => now()
+                        ]);
+                    }
+                }else{
+                    DB::connection("intra_payroll")->table($tbl)
+                        ->where("id", $request->id)
+                        ->delete();
+                }
 
               
 
@@ -1647,6 +1904,64 @@ class employeeController extends Controller
             ]);
 
             return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function approve_employee_action(Request $request)
+    {
+        $approval = DB::table("tbl_employee_approval")->where("id", $request->id)->first();
+
+        DB::beginTransaction();
+        try {
+
+            if($approval->action_type == "ADD"){
+                $data = json_decode($approval->payload, true);
+
+                $emp_id = DB::table("tbl_employee")->insertGetId($data);
+
+                // handle user account if needed
+            }
+
+            if($approval->action_type == "DELETE"){
+                DB::table("tbl_employee")->where("id", $approval->emp_id)->delete();
+            }
+
+            DB::table("tbl_employee_approval")
+                ->where("id", $approval->id)
+                ->update([
+                    "status" => "APPROVED",
+                    "approved_by" => Auth::user()->id,
+                    "date_approved" => now()
+                ]);
+
+            DB::commit();
+            return "approved";
+
+        } catch (\Throwable $th) {
+            DB::rollback();
+            return $th->getMessage();
+        }
+    }
+
+    public function reject_employee_action(Request $request)
+    {
+        DB::beginTransaction();
+        try {
+
+            DB::table("tbl_employee_approval")
+                ->where("id", $request->id)
+                ->update([
+                    "status" => "REJECTED",
+                    "approved_by" => Auth::user()->id,
+                    "date_approved" => now()
+                ]);
+
+            DB::commit();
+            return "rejected";
+
+        } catch (\Throwable $th) {
+            DB::rollback();
+            return $th->getMessage();
         }
     }
 

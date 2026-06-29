@@ -218,7 +218,243 @@ class timekeepingController extends Controller
             return json_encode($th->getMessage());
         }
     }
-    public function process_raw_logs(Request $request){
+    public function process_raw_logs(Request $request)
+    {
+        $role_id = Auth::user()->role_id;
+        DB::beginTransaction();
+        try {
+            $logs = DB::connection("intra_payroll")->table("tbl_raw_logs")
+            ->join("tbl_employee", "bio_id", "=", "biometric_id")
+            ->whereBetween("logs",[$request->tc_from, $request->tc_to]);
+
+            if ($role_id === 4) { // HR Group D
+                $logs = $logs->where("tbl_employee.hr_group", "group_d");
+            } elseif ($role_id === 5) { // HR Group B,C,E
+                $logs = $logs->whereIn("tbl_employee.hr_group", ["group_b","group_c","group_e"]);
+            }
+
+            $logs = $logs->where("biometric_id", "!=", "")
+            ->orderBy("tbl_raw_logs.logs", "ASC")
+            ->orderBy("state")
+            ->get();
+
+            foreach ($logs as $log_data) {
+
+                $log_time = strtotime($log_data->logs);
+                $log_hour = (int)date("H", $log_time);
+
+                // default target date
+                $target_date = date("Y-m-d", $log_time);
+                  
+                // if (($log_data->state == "PM_OUT" && $log_hour < 10)|| ($log_data->state == "AM_IN" && $log_hour < 8)){
+                //     $target_date = date("Y-m-d", strtotime($target_date . " -1 day"));
+                // }
+
+                if ($log_data->state == "PM_OUT") {
+                    if ($log_hour < 8 || $log_hour < 10) {
+                        $target_date = date("Y-m-d", strtotime($target_date . " -1 day"));
+                    }
+                }
+
+                if ($log_data->state == "AM_IN" && $log_hour < 8) {
+
+                    $prev_date = date("Y-m-d", strtotime($target_date . " -1 day"));
+
+                    $prev_tc = DB::connection("intra_payroll")->table("tbl_timecard")
+                        ->where("emp_id", $log_data->id)
+                        ->where("target_date", $prev_date)
+                        ->first();
+
+                    if ($prev_tc && $prev_tc->AM_IN != null && $prev_tc->PM_OUT == null) {
+
+                        $prev_in_time = strtotime($prev_tc->AM_IN);
+                        $current_in_time = strtotime($log_data->logs);
+
+                        $hours_diff = ($current_in_time - $prev_in_time) / 3600;
+
+                        // ONLY treat as PM_OUT if within night shift window
+                        if ($hours_diff <= 12) {
+                            $log_data->state = "PM_OUT";
+                            $target_date = $prev_date;
+                        }
+                    }
+                }
+
+                $log_info = strtotime($log_data->logs);
+
+                // CHECK TC
+                $tc = DB::connection("intra_payroll")->table("tbl_timecard")
+                    ->where("emp_id", $log_data->id)
+                    ->where("target_date", $target_date)
+                    ->first();
+
+                if ($tc != null) {
+                    $tc = json_decode(json_encode($tc), true);
+                    if ($log_data->state == "FLEX_IN" || $log_data->state == "FLEX_OUT") {
+                        $inserted_time = null;
+                    } else {
+                        $inserted_time = $tc[$log_data->state] ?? null;
+                    }
+
+                    if ($log_data->state == "AM_IN" || $log_data->state == "PM_IN" || $log_data->state == "OT_IN") {
+                        if ($inserted_time != "" && $inserted_time != null) {
+                            $current = strtotime($inserted_time);
+                            if ($log_info < $current) {
+                                DB::connection("intra_payroll")->table("tbl_timecard")
+                                    ->where("emp_id", $tc["emp_id"])
+                                    ->where("target_date", $target_date)
+                                    ->where("is_manual", 0)
+                                    ->update([
+                                        $log_data->state => $log_data->logs,
+                                        "user_id" => Auth::user()->id
+                                    ]);
+                            }
+                        } else {
+                            DB::connection("intra_payroll")->table("tbl_timecard")
+                                ->where("emp_id", $tc["emp_id"])
+                                ->where("target_date", $target_date)
+                                ->where("is_manual", 0)
+                                ->update([
+                                    $log_data->state => $log_data->logs,
+                                    "user_id" => Auth::user()->id
+                                ]);
+                        }
+                    } elseif ($log_data->state == "AM_OUT" || $log_data->state == "PM_OUT" || $log_data->state == "OT_OUT") {
+                        if ($inserted_time != "" && $inserted_time != null) {
+                            $current = strtotime($inserted_time);
+                            if ($log_info > $current) {
+                                DB::connection("intra_payroll")->table("tbl_timecard")
+                                    ->where("emp_id", $tc["emp_id"])
+                                    ->where("target_date", $target_date)
+                                    ->where("is_manual", 0)
+                                    ->update([
+                                        $log_data->state => $log_data->logs,
+                                        "user_id" => Auth::user()->id
+                                    ]);
+                            }
+                        } else {
+                            DB::connection("intra_payroll")->table("tbl_timecard")
+                                ->where("emp_id", $tc["emp_id"])
+                                ->where("target_date", $target_date)
+                                ->where("is_manual", 0)
+                                ->update([
+                                    $log_data->state => $log_data->logs,
+                                    "user_id" => Auth::user()->id
+                                ]);
+                        }
+                    } else {
+                        if ($log_data->state == "FLEX_OUT") {
+                            $tc_flex = DB::connection("intra_payroll")->table("tbl_timecard")
+                                ->where("emp_id", $tc["emp_id"])
+                                ->where("target_date", $target_date)
+                                ->first();
+
+                            if ($tc_flex != NULL) {
+                                $flex_in_log = strtotime($tc_flex->AM_IN);
+                                $flex_out_log = strtotime($log_data->logs);
+                                $time_consume = $flex_in_log - $flex_out_log;
+                                $total_consume = round(abs($time_consume) / 60, 2);
+                                $hours = $total_consume / 60;
+                                $total_hours = $tc_flex->flexi_hours + $hours;
+
+                                DB::connection("intra_payroll")->table("tbl_timecard")
+                                    ->where("emp_id", $tc["emp_id"])
+                                    ->where("target_date", $target_date)
+                                    ->where("is_manual", 0)
+                                    ->update([
+                                        "AM_IN" => NULL,
+                                        "user_id" => Auth::user()->id,
+                                        "flexi_hours" => $total_hours
+                                    ]);
+                            }
+                        } elseif ($log_data->state == "FLEX_IN") {
+                            DB::connection("intra_payroll")->table("tbl_timecard")
+                                ->where("emp_id", $tc["emp_id"])
+                                ->where("target_date", $target_date)
+                                ->where("is_manual", 0)
+                                ->update([
+                                    "AM_IN" => $log_data->logs,
+                                    "user_id" => Auth::user()->id,
+                                ]);
+                        }
+                    }
+                } else {
+                    if ($log_data->state == "OT_IN" || $log_data->state == "OT_OUT") {
+                        //CHECK IF HAS IN AND OUT
+                        $tc2 = DB::connection("intra_payroll")->table("tbl_timecard")
+                            ->where("emp_id", $log_data->id)
+                            ->where("target_date", $target_date)
+                            ->where("AM_IN", "!=", NULL)
+                            ->orWhere("emp_id", $log_data->id)
+                            ->where("target_date", $target_date)
+                            ->where("AM_IN", "!=", "")
+                            ->first();
+                        if ($tc2 != null) {
+                            $log2 = strtotime($tc2->logs);
+                            $current_log = strtotime($log_data->logs);
+                            if ($log2 > $current_log) {
+                                $target_date = date("Y-m-d", strtotime($target_date . " -1 day"));
+                            }
+                            $tc3 = DB::connection("intra_payroll")->table("tbl_timecard")
+                                ->where("emp_id", $log_data->id)
+                                ->where("target_date", $target_date)
+                                ->first();
+                            if ($tc3 != null) {
+                                DB::connection("intra_payroll")->table("tbl_timecard")
+                                    ->where("emp_id", $tc["emp_id"])
+                                    ->where("target_date", $target_date)
+                                    ->where("is_manual", 0)
+                                    ->update([
+                                        $log_data->state => $log_data->logs,
+                                        "user_id" => Auth::user()->id
+                                    ]);
+                            } else {
+                                DB::connection("intra_payroll")->table("tbl_timecard")
+                                    ->insert([
+                                        $log_data->state => $log_data->logs,
+                                        "user_id" => Auth::user()->id,
+                                        "target_date" => $target_date,
+                                        "emp_id" => $log_data->id
+                                    ]);
+                            }
+                        } else {
+                            DB::connection("intra_payroll")->table("tbl_timecard")
+                                ->insert([
+                                    $log_data->state => $log_data->logs,
+                                    "user_id" => Auth::user()->id,
+                                    "target_date" => $target_date,
+                                    "emp_id" => $log_data->id
+                                ]);
+                        }
+                    } elseif ($log_data->state == "AM_IN" || $log_data->state == "AM_OUT" || $log_data->state == "PM_IN" || $log_data->state == "PM_OUT") {
+                        DB::connection("intra_payroll")->table("tbl_timecard")
+                            ->insert([
+                                $log_data->state => $log_data->logs,
+                                "user_id" => Auth::user()->id,
+                                "target_date" => $target_date,
+                                "emp_id" => $log_data->id
+                            ]);
+                    } else {
+                        if ($log_data->state == "FLEX_IN") {
+                            DB::connection("intra_payroll")->table("tbl_timecard")
+                                ->insert([
+                                    "AM_IN" => $log_data->logs,
+                                    "user_id" => Auth::user()->id,
+                                    "target_date" => $target_date,
+                                    "emp_id" => $log_data->id
+                                ]);
+                        }
+                    }
+                }
+            }
+            DB::commit();
+            return json_encode("Success");
+        } catch (\Throwable $th) {
+            DB::rollback();
+            return json_encode($th->getMessage() . '--' . $th->getLine());
+        }
+    }
+    public function process_raw_logs_old(Request $request){
         $role_id = Auth::user()->role_id;
         DB::beginTransaction();
         try {
@@ -1124,22 +1360,38 @@ class timekeepingController extends Controller
                 // Batangas
                 // Laguna (Team Dante)
                 // Bicol (Team Dante)
+                // FTTX Bulacan May 11 2026
                 $tbl_employee = $tbl_employee->where(function ($q) {
-                    $q->whereIn("branch_id",[71,70,57,90,59])
+                    $q->whereIn("branch_id",[71,70,57,90,59,115])
                     ->orWhere("user_id", Auth::user()->id); // always include self
                 });
             } elseif($role_id === 24){
-                // Maica Nueva
+                // charlene san diego Visayas May 11 2026
+                // VIS -  FTK WIRELESS MACTAN
+                // VIS - BACOLOD DAS REHAB
+                // VIS - Cebu City Pardo
+                // VIS - HM TOWER
+                // VIS - ILOILO
+                // VIS - JMALL
+                // VIS - VICENTE SOTTO
+                  //  V6043 – RGC 2
+                // • V5127 – SM Bacolod
+                // • 3324 – Riverside Hospital
+                // • V0683 – Chong Hua Hospital
+                // • P40 – Mactan Terminal 1
+                // • V6616 – Mactan Terminal 2
+                $tbl_employee = $tbl_employee->where(function ($q) {
+                    $q->whereIn("branch_id",[98,93,114,55,49,74,99,113,116,122,123,125,126])
+                    ->orWhere("user_id", Auth::user()->id); // always include self
+                });
+            } elseif($role_id === 30){
+                // GLORY BEL CAUSING NCR May 11 2026
                 // NCR - SM EAST
                 // NCR - STA LUCIA
-                // CEBU - CAD
-                //add feb 25 2026
-                // VIS - HM TOWER
-                // VIS - JMALL
-                // VIS - ILOILO
-                // VIS - BACOLOD
+                // NCR - MALACANANG
+                // NCR - SM North
                 $tbl_employee = $tbl_employee->where(function ($q) {
-                    $q->whereIn("branch_id",[50,91,52,49,55,74,93])
+                    $q->whereIn("branch_id",[50,91,110,111,124])
                     ->orWhere("user_id", Auth::user()->id); // always include self
                 });
             } elseif($role_id === 25){
@@ -1158,8 +1410,10 @@ class timekeepingController extends Controller
                 // Davao Airport
                 // SM City Davao
                 // KCC Zamboanga
+                // SM Tagum
+                // UM Matina added May 11 2026
                 $tbl_employee = $tbl_employee->where(function ($q) {
-                    $q->whereIn("branch_id",[56,92,95,96,])
+                    $q->whereIn("branch_id",[56,92,95,96,107,108])
                     ->orWhere("user_id", Auth::user()->id); // always include self
                 });
             } else{
@@ -1501,6 +1755,7 @@ class timekeepingController extends Controller
         $query = DB::connection("intra_payroll")
             ->table("tbl_ot_applied as ot")
             ->join("tbl_employee as emp", "emp.id", "=", "ot.emp_id")
+            ->leftJoin('users', 'users.id', '=', 'ot.user_approved')
             ->select(
                 "ot.*",
                 "emp.first_name",
@@ -1510,7 +1765,8 @@ class timekeepingController extends Controller
                 "emp.department",
                 "emp.hr_group",
                 "emp.user_id",
-                "emp.branch_id as emp_branch_id"
+                "emp.branch_id as emp_branch_id",
+                "users.name as approver_name",
             );
         // Filter by user type and date range
         if (Auth::user()->access[$request->page]["user_type"] != "employee") {
@@ -1586,6 +1842,7 @@ class timekeepingController extends Controller
                 $query->where(function($q){
                     // $q->whereIn("emp.branch_id", [57,59,70,46,71,50,62])
                     $q->where("emp.hr_group", "group_e")
+                    ->orWhere("emp.position_id", 76) //all team leader
                      ->whereIn("ot.status", ["FILED","APPROVED"]);
                 })
                 ->orWhere("emp.user_id", Auth::user()->id);
@@ -1664,7 +1921,7 @@ class timekeepingController extends Controller
                 $short = substr($row->reason, 0, 10);
                 return '<span title="' . e($row->reason) . '">' . e($short) . '...</span>';
             })
-            ->addColumn('ot_status', function($row) {
+            ->addColumn('ot_status', function($row) use ($role_id) {
                 $status = $row->status;
                 $role_id = Auth::user()->role_id;
                 if ($status === "FILED") {
@@ -1673,11 +1930,19 @@ class timekeepingController extends Controller
                     $status = "<span class='badge badge-info'>FOR FINAL APPROVAL</span>";
                 } elseif ($status === "APPROVED") {
                     $status = "<span class='badge badge-success'>APPROVED</span>";
+                    // Add approver name ONLY if role_id = 1
+                    if ($role_id == 1 && !empty($row->approver_name)) {
+                        $status .= "<br><small>by: " . e($row->approver_name) . "</small>";
+                    }
                 }
                 return $status;
             })
-            ->addColumn('action', function($row) use ($page_permission, $request) {
+            ->addColumn('action', function($row) use ($page_permission, $request, $role_id) {
                 $btn = "";
+                $class_disable_delete = '';
+                if($row->status === 'APPROVED' && $role_id !== 1){
+                    $class_disable_delete = 'disabled';
+                }
                 if (preg_match("/U/i", $page_permission)) {
                     $type = "ot_request";
                     if (Auth::user()->access[$request->page]["user_type"] != "employee") {
@@ -1700,6 +1965,7 @@ class timekeepingController extends Controller
                         $btn .= " <button 
                             class='btn btn-sm btn-danger'
                             onclick='delete_ot({$row->id}, \"{$type}\")'
+                            $class_disable_delete
                             >
                             Delete
                             </button>";
@@ -3604,13 +3870,17 @@ class timekeepingController extends Controller
             ->select("id", "first_name", "middle_name", "last_name", "ext_name","emp_code")
             ->where("is_active", 1);
         if ($role_id === 4) { // HR Group D
-            $employees = $employees->where("hr_group", "group_a");
+            $employees = $employees->where("hr_group", "group_d")
+            ->orWhere("user_id", Auth::user()->id);
         } elseif ($role_id === 5) { // HR Group B,C,E
-            $employees = $employees->whereIn("hr_group", ["group_b","group_c","group_e"]);
+            $employees = $employees->whereIn("hr_group", ["group_b","group_c","group_e"])
+            ->orWhere("user_id", Auth::user()->id);
         } elseif ($role_id === 14) { // HR Group B,C
-            $employees = $employees->whereIn("hr_group", ["group_b","group_c"]);
+            $employees = $employees->whereIn("hr_group", ["group_b","group_c"])
+            ->orWhere("user_id", Auth::user()->id);
         } elseif ($role_id === 15) { // HR Group C
-            $employees = $employees->whereIn("hr_group", ["group_c","group_e"]);
+            $employees = $employees->whereIn("hr_group", ["group_c","group_e"])
+            ->orWhere("user_id", Auth::user()->id);
         } 
         // elseif ($role_id === 22) { // HR Group E
         //     $employees = $employees->where("hr_group", "group_e");

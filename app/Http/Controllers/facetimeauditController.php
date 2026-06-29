@@ -195,4 +195,113 @@ class facetimeauditController extends Controller
         }
     }
 
+    public function delete_face_time_audit_images(Request $request)
+    {
+        if (!$request->filled('date_range')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please select a date range before deleting images.',
+            ], 422);
+        }
+
+        $faceRoot = rtrim(config('services.face_images.root'), '/\\');
+        $facePath = trim(config('services.face_images.face_path'), '/\\');
+
+        if (empty($faceRoot) || empty($facePath)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Face image storage path is not configured.',
+            ], 500);
+        }
+
+        [$start_date, $end_date] = explode(' - ', $request->date_range);
+
+        $logs = DB::connection("intra_payroll")->table("tbl_face_time_audit")
+            ->whereNotNull("image")
+            ->where("image", "!=", "")
+            ->whereBetween('created_at', [
+                $start_date . ' 00:00:00',
+                $end_date . ' 23:59:59'
+            ]);
+
+        $rows = $logs->select("id", "image")->get();
+        $faceImagesRoot = $this->normalizePath($faceRoot . DIRECTORY_SEPARATOR . $facePath);
+        $deletedFiles = 0;
+        $missingFiles = 0;
+        $skippedFiles = 0;
+        $clearedRows = 0;
+
+        foreach ($rows as $row) {
+            $relativePath = parse_url($row->image, PHP_URL_PATH) ?: $row->image;
+            $relativePath = ltrim($relativePath, "/\\");
+            $fullPath = $this->normalizePath($faceRoot . DIRECTORY_SEPARATOR . $relativePath);
+
+            if (!$this->isPathInside($fullPath, $faceImagesRoot)) {
+                $skippedFiles++;
+                continue;
+            }
+
+            if (file_exists($fullPath) && is_file($fullPath)) {
+                if (@unlink($fullPath)) {
+                    $deletedFiles++;
+                } else {
+                    $skippedFiles++;
+                    continue;
+                }
+            } else {
+                $missingFiles++;
+            }
+
+            DB::connection("intra_payroll")
+                ->table("tbl_face_time_audit")
+                ->where("id", $row->id)
+                ->update(["image" => ""]);
+
+            $clearedRows++;
+        }
+
+        return response()->json([
+            'success' => true,
+            'matched_logs' => $rows->count(),
+            'cleared_logs' => $clearedRows,
+            'deleted_files' => $deletedFiles,
+            'missing_files' => $missingFiles,
+            'skipped_files' => $skippedFiles,
+        ]);
+    }
+
+    private function normalizePath($path)
+    {
+        $path = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
+        $parts = [];
+
+        foreach (explode(DIRECTORY_SEPARATOR, $path) as $part) {
+            if ($part === '' || $part === '.') {
+                continue;
+            }
+
+            if ($part === '..') {
+                array_pop($parts);
+                continue;
+            }
+
+            $parts[] = $part;
+        }
+
+        $prefix = DIRECTORY_SEPARATOR;
+        if (preg_match('/^[A-Za-z]:$/', $parts[0] ?? '')) {
+            $prefix = '';
+        }
+
+        return $prefix . implode(DIRECTORY_SEPARATOR, $parts);
+    }
+
+    private function isPathInside($path, $root)
+    {
+        $root = rtrim($root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        $path = rtrim($path, DIRECTORY_SEPARATOR);
+
+        return strpos($path, $root) === 0;
+    }
+
 }

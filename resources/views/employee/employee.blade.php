@@ -76,7 +76,7 @@
 
                     <div class="col-md-3">
 
-                            <label class="employee-count-label"><strong>{{$employee_count}} Employee(s)</strong></label>
+                            <label class="employee-count-label"><strong>{{$employee_count}} Active Employee(s)</strong></label>
 
                                
 
@@ -131,6 +131,8 @@
                                         <th >Site</th>
 
                                         <th >Designation</th>
+
+                                        <th>Status</th>
 
                                         <th>Action</th>
 

@@ -17,6 +17,7 @@ class PersonnelAction extends Model
     protected $fillable = [
         'employee_id',
         'action_type',
+        'other_specify',
         'position_id',
         'department_id',
         'date_hired',

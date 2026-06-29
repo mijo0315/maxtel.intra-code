@@ -547,6 +547,45 @@
                     }
                 });
             }
+            function approve(id){
+
+                $.ajax({
+                    url: "{{ route('employee.approve') }}",
+                    type: "POST",
+                    data: {
+                        _token: "{{ csrf_token() }}",
+                        id: id
+                    },
+                    success: function(response){
+                        if(response === "approved"){
+                            $.notify("Approved successfully", {type:"success"});
+                            employee_list(); // reload table
+                        }else{
+                            $.notify(response, {type:"danger"});
+                        }
+                    }
+                });
+            }
+
+            function reject(id){
+
+                $.ajax({
+                    url: "{{ route('employee.reject') }}",
+                    type: "POST",
+                    data: {
+                        _token: "{{ csrf_token() }}",
+                        id: id
+                    },
+                    success: function(response){
+                        if(response === "rejected"){
+                            $.notify("Rejected successfully", {type:"warning"});
+                            employee_list();
+                        }else{
+                            $.notify(response, {type:"danger"});
+                        }
+                    }
+                });
+            }
             function emp_view_close(){
                 $.confirm({
 							title: 'Close',
@@ -609,6 +648,7 @@
 					{'data': 'department'},
 					{'data': 'branch'},
 					{'data': 'designation'},
+                    {'data': 'status', 'orderable': false, 'searchable': false},
 					{'data': 'action', 'orderable': false, 'searchable': false},
                 ]
             });

@@ -32,7 +32,8 @@
                             data-sss='0'
                             data-ph='0'
                             data-hdmf='0'
-                            
+                            data-rice_allowance='0'
+                            data-rice_allowance_amount='0'
                             data-target='#payroll_modal'
                             >
                                 
@@ -169,9 +170,9 @@
                     <select name="process_type" id="process_type" style="width:100%" class="form-control form-select">
                             <option value="RP">REGULAR PAYROLL</option>
                             <option value="13">13TH MONTH PAYROLL</option>
-                            <option value="BP">BONUS PAYROLL</option>
+                            <!-- <option value="BP">BONUS PAYROLL</option>
                             <option value="SP">SPECIAL PAYROLL</option>
-                            <option value="LC">LEAVE CREDITS PAYROLL</option>
+                            <option value="LC">LEAVE CREDITS PAYROLL</option> -->
                     </select>
                 </div>
             </div>
@@ -194,11 +195,11 @@
                 </div>
                 <div class="col-md-5">
                     <select name="hr_group" class="form-control form-select" id="hr_group" style="width:100%">
-                        <option value="group_a">GROUP A</option>
-                        <option value="group_b">GROUP B</option>
-                        <option value="group_c">GROUP C</option>
-                        <option value="group_d">GROUP D</option>
-                        <option value="group_e">GROUP E</option>
+                        <option value="group_a">A</option>
+                        <option value="group_b">HQ</option>
+                        <option value="group_c">Site Maxtel</option>
+                        <option value="group_d">Office PM</option>
+                        <option value="group_e">Site PM</option>
                     </select>
                 </div>
             </div>
@@ -238,6 +239,31 @@
                             @endforeach
                     </select>
                 </div> 
+            </div>
+            <div class="row mt-2">
+                <div class="col-md-3">
+                    <label for="rice_allowance" style="float: right;" class="btn btn-info btn-sm">
+                        Rice Allowance
+                    </label>
+                </div>
+
+                <div class="col-md-6 d-flex align-items-center">
+                    <input type="checkbox"
+                        id="rice_allowance"
+                        value="1"
+                        style="width:30px;height:30px;">
+
+                    <div id="rice_allowance_amount_div" class="ml-3" style="display:none;">
+                        <input type="number"
+                            class="form-control"
+                            id="rice_allowance_amount"
+                            name="rice_allowance_amount"
+                            min="0"
+                            step="0.01"
+                            placeholder="Enter Amount"
+                            value="1500">
+                    </div>
+                </div>
             </div>
             <div class="row mt-2">
                 

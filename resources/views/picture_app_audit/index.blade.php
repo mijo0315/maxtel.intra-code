@@ -150,6 +150,11 @@
                                 <div class="col-md-2">
                                     <button id="export-btn" class="btn btn-primary w-100">Export to Excel</button>
                                 </div>
+                                @if(Auth::user()->role_id == 1)
+                                    <div class="col-md-2">
+                                        <button id="delete-images-btn" class="btn btn-danger w-100">Delete Images</button>
+                                    </div>
+                                @endif
                                 <!-- <div class="col-md-2">
                                     <button id="export-entries-btn" class="btn btn-success w-100">Export All Entries</button>
                                 </div> -->
@@ -270,9 +275,13 @@
             if(images){
                 var galleryHtml = '';
                 images.forEach(function(image) {
+                    var imageHtml = image.image
+                        ? `<img src="https://maxtel-face.intra-code.com/${image.image}" alt="">`
+                        : `<div class="d-flex align-items-center justify-content-center bg-light text-muted" style="height: 150px; border-radius: 8px;">No image</div>`;
+
                     galleryHtml += `
                         <div class="gallery-item">
-                            <img src="https://maxtel-face.intra-code.com/${image.image}" alt="${image.name}">
+                            ${imageHtml}
                             <p>${image.remarks} <br> ${image.server_timestamp} <br> ${image.app_location}</p>
                         </div>
                     `;
@@ -343,6 +352,50 @@
             form.submit();
             document.body.removeChild(form);
         });
+
+        @if(Auth::user()->role_id == 1)
+        $("#delete-images-btn").on("click", function() {
+            var bioId = $("#emp_list").val();
+            var dateRange = $('#date_range').val();
+
+            if (!dateRange) {
+                alert('Please select a date range before deleting images.');
+                return;
+            }
+
+            if (!confirm('Delete images for all employees in the selected date range? The log records will remain.')) {
+                return;
+            }
+
+            $.ajax({
+                url: "{{ route('delete_picture_app_audit_images') }}",
+                type: "POST",
+                dataType: "json",
+                data: {
+                    "_token": "{{ csrf_token() }}",
+                    "bio_id": bioId,
+                    "date_range": dateRange
+                },
+                success: function(response) {
+                    alert(
+                        response.cleared_logs + ' log image(s) cleared. ' +
+                        response.deleted_files + ' file(s) deleted. ' +
+                        response.missing_files + ' file(s) were already missing.'
+                    );
+                    loadFaceTimeAuditImages();
+                },
+                error: function(xhr) {
+                    var message = 'Failed to delete images.';
+
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        message = xhr.responseJSON.message;
+                    }
+
+                    alert(message);
+                }
+            });
+        });
+        @endif
 
         $("#export-entries-btn").on("click", function() {
             var bioId = $("#emp_list").val();

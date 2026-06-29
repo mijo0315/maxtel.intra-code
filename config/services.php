@@ -30,4 +30,10 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'face_images' => [
+        'root' => '/home/maxtel-face.intra-code.com/public_html',
+        'entries_path' => 'public/images/entries',
+        'face_path' => 'public/images/face',
+    ],
+
 ];

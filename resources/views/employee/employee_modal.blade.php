@@ -271,11 +271,11 @@
                                 </div>
                                 <div class="col-md-3">
                                     <select class="form-control form-select" id="hr_group">
-                                        <option value="group_a">GROUP A</option>
-                                        <option value="group_b">GROUP B</option>
-                                        <option value="group_c">GROUP C</option>
-                                        <option value="group_d">GROUP D</option>
-                                        <option value="group_e">GROUP E</option>
+                                        <option value="group_a">A</option>
+                                        <option value="group_b">HQ</option>
+                                        <option value="group_c">Site Maxtel</option>
+                                        <option value="group_d">Office PM</option>
+                                        <option value="group_e">Site PM</option>
                                     </select>
                                 </div>
                                 

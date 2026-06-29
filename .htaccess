@@ -1,38 +1,54 @@
-<IfModule mod_rewrite.c>
-    <IfModule mod_negotiation.c>
-        Options -MultiViews -Indexes
-    </IfModule>
+Options -Indexes
 
+<IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # Handle Authorization Header
+    ############################################################
+    # BLOCK SENSITIVE FILES
+    ############################################################
+
+    RewriteRule (^|/)\.env$ - [F,L,NC]
+    RewriteRule ^composer\.json$ - [F,L,NC]
+    RewriteRule ^composer\.lock$ - [F,L,NC]
+    RewriteRule ^artisan$ - [F,L,NC]
+    RewriteRule ^package\.json$ - [F,L,NC]
+    RewriteRule ^phpunit\.xml$ - [F,L,NC]
+    RewriteRule ^server\.php$ - [F,L,NC]
+
+    ############################################################
+    # BLOCK SENSITIVE DIRECTORIES
+    ############################################################
+
+    RewriteRule ^vendor(/.*)?$ - [F,L,NC]
+    RewriteRule ^storage(/.*)?$ - [F,L,NC]
+    RewriteRule ^bootstrap(/.*)?$ - [F,L,NC]
+    RewriteRule ^config(/.*)?$ - [F,L,NC]
+    RewriteRule ^database(/.*)?$ - [F,L,NC]
+    RewriteRule ^resources(/.*)?$ - [F,L,NC]
+    RewriteRule ^routes(/.*)?$ - [F,L,NC]
+    RewriteRule ^tests(/.*)?$ - [F,L,NC]
+
+    ############################################################
+    # HANDLE AUTHORIZATION HEADER
+    ############################################################
+
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
-    # Redirect Trailing Slashes If Not A Folder...
+    ############################################################
+    # REDIRECT TRAILING SLASHES
+    ############################################################
+
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_URI} (.+)/$
     RewriteRule ^ %1 [L,R=301]
 
-    # Send Requests To Front Controller...
+    ############################################################
+    # SEND TO LARAVEL
+    ############################################################
+
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
-</IfModule>
 
-<IfModule mod_expires.c>
-    ExpiresActive On
-    ExpiresByType image/jpg "access plus 0 seconds"
-    ExpiresByType image/jpeg "access plus 0 seconds"
-    ExpiresByType image/png "access plus 0 seconds"
-    ExpiresByType image/gif "access plus 0 seconds"
 </IfModule>
-
-<IfModule mod_headers.c>
-    <FilesMatch "\.(jpg|jpeg|png|gif)$">
-        Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
-        Header set Pragma "no-cache"
-        Header set Expires 0
-    </FilesMatch>
-</IfModule>
-

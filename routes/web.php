@@ -177,8 +177,11 @@ Route::get('payroll_management', [payrollController::class, 'payroll_management'
     Route::post('uploadEmployeeDeductionOneTime', [payrollController::class, 'uploadEmployeeDeductionOneTime'])->middleware(['auth'])->name('uploadEmployeeDeductionOneTime');
     Route::post('uploadEmployeeOtherIncome', [payrollController::class, 'uploadEmployeeOtherIncome'])->middleware(['auth'])->name('uploadEmployeeOtherIncome');
     
-    
-    
+    Route::post('credit-adj/store', [payrollController::class, 'store_credit_adj'])->middleware(['auth'])->name('credit_adj.store');
+    Route::post('credit-adj/list', [payrollController::class, 'list_credit_adj'])->middleware(['auth'])->name('credit_adj.list');
+    Route::post('credit-adj/approve', [payrollController::class, 'approve_credit_adj'])->middleware(['auth'])->name('credit_adj.approve');
+    Route::post('credit-adj/reject', [payrollController::class, 'reject_credit_adj'])->middleware(['auth'])->name('credit_adj.reject');
+    Route::post('load_payroll_employees', [payrollController::class, 'load_payroll_employees'])->middleware(['auth'])->name('load_payroll_employees');
     
 Route::get('income_management', [othIncomeController::class, 'income_management'])->middleware(['auth'])->name('income_management');
     Route::post('oth_library_list', [othIncomeController::class, 'oth_library_list'])->middleware(['auth'])->name('oth_library_list');
@@ -248,14 +251,18 @@ Route::get('employees_management', [employeeController::class, 'employees_manage
     Route::post('save_designation', [employeeController::class, 'save_designation'])->middleware(['auth'])->name('save_designation');        
     //employee upload
     Route::post('upload_excel_employee', [employeeController::class, 'upload_excel_employee'])->name('upload.excel.employee');
+    Route::post('employee/approve', [employeeController::class, 'approve_employee_action'])->middleware(['auth'])->name('employee.approve');
+    Route::post('employee/reject', [employeeController::class, 'reject_employee_action'])->middleware(['auth'])->name('employee.reject');
     //face time audit
      Route::get('face_and_time_audit', [facetimeauditController::class, 'face_and_time_audit'])->middleware(['auth'])->name('face_and_time_audit');
      Route::post('load_face_time_audit_tbl', [facetimeauditController::class, 'load_face_time_audit_tbl'])->middleware(['auth'])->name('load_face_time_audit_tbl');
      Route::post('export_face_time_audit', [facetimeauditController::class, 'export_face_time_audit'])->middleware(['auth'])->name('export_face_time_audit');
+     Route::post('delete_face_time_audit_images', [facetimeauditController::class, 'delete_face_time_audit_images'])->middleware(['auth'])->name('delete_face_time_audit_images');
     
     Route::get('picture_app_audit', [pictureAppAuditController::class, 'picture_app_audit'])->middleware(['auth'])->name('picture_app_audit');
      Route::post('load_picture_app_audit_tbl', [pictureAppAuditController::class, 'load_picture_app_audit_tbl'])->middleware(['auth'])->name('load_picture_app_audit_tbl');
      Route::post('export_picture_app_audit', [pictureAppAuditController::class, 'export_picture_app_audit'])->middleware(['auth'])->name('export_picture_app_audit');
+     Route::post('delete_picture_app_audit_images', [pictureAppAuditController::class, 'delete_picture_app_audit_images'])->middleware(['auth'])->name('delete_picture_app_audit_images');
      Route::post('export_all_entries', [pictureAppAuditController::class, 'export_all_entries'])->middleware(['auth'])->name('export_all_entries');
       //nte management
     Route::get('/nte_management', [NteController::class, 'index'])->middleware(['auth'])->name('nte_management');
@@ -317,6 +324,14 @@ Route::post('unlisted_locations/mark-as-listed', [UnlistedLocationsController::c
 Route::delete('unlisted_locations/remove-listed/{id}', [UnlistedLocationsController::class, 'removeListed'])->middleware(['auth'])->name('remove_listed');
 Route::post('unlisted_locations_list', [UnlistedLocationsController::class, 'getUnlistedLocationsData'])->middleware(['auth'])->name('unlisted_locations_list');
 Route::post('listed_locations_list', [UnlistedLocationsController::class, 'getListedLocationsData'])->middleware(['auth'])->name('listed_locations_list');
+// Low Attendance Report
+Route::get('low-attendance-report', [UnlistedLocationsController::class, 'report'])->middleware(['auth'])->name('low_attendance_report');
+Route::post('low-attendance-data', [UnlistedLocationsController::class, 'getLowAttendanceData'])->middleware(['auth'])->name('low_attendance_data');
+Route::get('export-low-attendance', [UnlistedLocationsController::class, 'exportLowAttendance'])->middleware(['auth'])->name('export_low_attendance');
+// Unlisted Locations Report
+Route::get('unlisted-locations-report', [UnlistedLocationsController::class, 'unlistedLocationsReport'])->middleware(['auth'])->name('unlisted_locations_report');
+Route::post('unlisted-locations-report-data', [UnlistedLocationsController::class, 'getUnlistedLocationsReportData'])->middleware(['auth'])->name('unlisted_locations_report_data');
+Route::get('export-unlisted-locations', [UnlistedLocationsController::class, 'exportUnlistedLocations'])->middleware(['auth'])->name('export_unlisted_locations');
         //TEMPO
 Route::get('/', function () {  
     return redirect('login'); 

@@ -292,6 +292,7 @@ class PersonnelActionController extends Controller
                 'employee_id' => 'required|exists:intra_payroll.tbl_employee,id',
                 'action_type' => 'required|string',
                 'effective_date' => 'required|date',
+                'other_specify' => 'nullable|string',
                 'remarks' => 'nullable|string'
             ]);
 
@@ -363,6 +364,7 @@ class PersonnelActionController extends Controller
                     'pa.employee_id',
                     'pa.action_type',
                     'pa.effective_date',
+                    'pa.other_specify',
                     'pa.remarks',
                     'e.emp_code',
                     'e.first_name',
@@ -415,6 +417,7 @@ class PersonnelActionController extends Controller
                 'employee_name' => $employee_name,
                 'action_type' => $action->action_type,
                 'effective_date' => $action->effective_date,
+                'other_specify' => $action->other_specify,
                 'remarks' => $action->remarks,
                 'details' => $details
             ], 200);
@@ -463,6 +466,7 @@ class PersonnelActionController extends Controller
                 'employee_id' => 'required|exists:intra_payroll.tbl_employee,id',
                 'action_type' => 'required|string',
                 'effective_date' => 'required|date',
+                'other_specify' => 'nullable|string',
                 'remarks' => 'nullable|string'
             ]);
 

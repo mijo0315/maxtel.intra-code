@@ -49,6 +49,7 @@ class leaveController extends Controller
                 }elseif($role_id === 8){ // 1st Approver - RA Jabson Batangas, Bicol 1, Bicol 2, Candido - Operations, Laguna, NCR, Palawan
                     // $query->whereIn("branch_id", [57,59,70,46,71,50,62])
                     $query->where("hr_group", "group_e")
+                    ->orWhere("position_id", 76) //all team leader
                     ->orWhere("user_id", Auth::user()->id);
                 }elseif($role_id === 9){ //1st Approver - Anafe (Warehouse)
                     $query->where("branch_id", 77)
@@ -441,6 +442,7 @@ class leaveController extends Controller
             ->table("tbl_leave_used as lu")
             ->join("tbl_employee as emp", "emp.id", "=", "lu.emp_id")
             ->join("tbl_leave_types as lt", "lt.id", "=", "lu.leave_source_id")
+            ->leftJoin('users', 'users.id', '=', 'lu.user_id')
             ->select(
                 "lu.*",
                 "emp.first_name",
@@ -450,7 +452,8 @@ class leaveController extends Controller
                 "emp.department",
                 "emp.hr_group",
                 "emp.user_id",
-                "lt.leave_name"
+                "lt.leave_name",
+                "users.name as approver_name",
             );
         if (Auth::user()->access[$request->page]["user_type"] != "employee") {
             if ($role_id === 4) {
@@ -517,6 +520,7 @@ class leaveController extends Controller
                 $query->where(function($q){
                     // $q->whereIn("emp.branch_id", [57,59,70,46,71,50,62])
                     $q->where("emp.hr_group", "group_e")
+                    ->orWhere("emp.position_id", 76) //all team leader
                     ->whereIn("lu.leave_status", ["FILED","APPROVED"]);
                 })
                 ->orWhere("emp.user_id", Auth::user()->id);
@@ -591,7 +595,7 @@ class leaveController extends Controller
             ->addColumn('leave_count', function($row) {
                 return $row->leave_count;
             })
-            ->addColumn('leave_status', function($row) {
+            ->addColumn('leave_status', function($row) use ($role_id) {
                 $status = $row->leave_status;
                 $role_id = Auth::user()->role_id;
                 if ($status === "FILED") {
@@ -600,12 +604,20 @@ class leaveController extends Controller
                     $status = "<span class='badge badge-info'>FOR FINAL APPROVAL</span>";
                 } elseif ($status === "APPROVED") {
                     $status = "<span class='badge badge-success'>APPROVED</span>";
+                    // Add approver name ONLY if role_id = 1
+                    if ($role_id == 1 && !empty($row->approver_name)) {
+                        $status .= "<br><small>by: " . e($row->approver_name) . "</small>";
+                    }
                 }
                 return $status;
             })
             ->addColumn('action', function($row) use ($page_permission, $request) {
                 $btn = "";
                 $role_id = Auth::user()->role_id;
+                $class_disable_delete = '';
+                if($row->leave_status === 'APPROVED' && $role_id !== 1){
+                    $class_disable_delete = 'disabled';
+                }
                 if (preg_match("/U/i", $page_permission)) {
                     if (Auth::user()->access[$request->page]["user_type"] != "employee") {
                         $btn .= "<a 
@@ -627,6 +639,7 @@ class leaveController extends Controller
                         $btn .= "<button 
                             class='btn btn-sm btn-danger'
                             onclick='delete_file_leave({$row->id})'
+                            $class_disable_delete
                         >
                             Delete
                         </button>";
@@ -654,7 +667,7 @@ class leaveController extends Controller
                         $btn .= "<button 
                             class='btn btn-sm btn-danger'
                             onclick='delete_file_leave({$row->id})'
-                            $class_disable
+                            $$class_disable_delete
                         >
                             Delete
                         </button>";
@@ -1048,6 +1061,7 @@ class leaveController extends Controller
             }elseif($role_id === 8){ // 1st Approver - RA Jabson Batangas, Bicol 1, Bicol 2, Candido - Operations, Laguna, NCR, Palawan
                 // $query->whereIn("branch_id", [57,59,70,46,71,50,62])
                 $query->where("hr_group", "group_e")
+                ->orWhere("position_id", 76) //all team leader
                 ->orWhere("user_id", Auth::user()->id);
             }elseif($role_id === 9){ //1st Approver - Anafe (Warehouse)
                 $query->where("branch_id", 77)

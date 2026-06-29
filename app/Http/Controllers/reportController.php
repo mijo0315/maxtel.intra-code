@@ -284,6 +284,10 @@ class reportController extends Controller
                     $deduction =  $this->search_to_array($deduction_list, "emp_id", $emp_id);
                     foreach($deduction as $ded){
                         $ded_type = $ded["type"];
+                        $ded_amount = $ded["amount"];
+                        if($ded_type == "LATE"){
+                            $ded_amount = round($ded["amount"]);
+                        }
                         $deduction_name =  $this->search_to_array($lib_loans, "id", str_replace("R_","", $ded["type"]));
                         if(count($deduction_name) == 1){
                             $ded_name = $deduction_name[0]["name"];
@@ -299,7 +303,7 @@ class reportController extends Controller
                        $ded_data = array(
                             "emp_id" => $emp_id,
                             "deduction_name" => $ded_name,
-                            "amount" => $ded["amount"]
+                            "amount" => $ded_amount
                        );
                       
                        array_push($payslip_deduction, $ded_data);
@@ -945,28 +949,56 @@ class reportController extends Controller
                     $bp_days = 0;
                     $daily_rate = floatval($emp_data[0]["salary_rate"]);
                     $yearly_divisor = $emp_data[0]["yearly_divisor"];
-                    if($emp_data[0]["salary_type"] == "MONTHLY"){
+                    $emp_salary_type = $emp_data[0]["salary_type"];
+                    if($emp_salary_type == "MONTHLY"){
                         $emp_yearly_rate = $emp_data[0]["salary_rate"]*12;
                         $daily_rate = $emp_yearly_rate / $yearly_divisor;
                     }
                     $bp = $this->search_to_array($inc_data,"type", "BP");
                     if (count($bp) > 0) {
+
                         $basic_pay_amount = $bp[0]["amount"];
                         if ($daily_rate > 0) {
-                            $bp_days = round($basic_pay_amount / $daily_rate, 2);
+                            if($emp_salary_type == "DAILY"){
+                                $bp_days = round($basic_pay_amount / $daily_rate, 2);
+                            }else{
+                                $timekeeping = DB::connection("intra_payroll")
+                                    ->table("tbl_timekeeping")
+                                    ->where("payroll_id", $payroll_id)
+                                    ->where("emp_id", $emp_id)
+                                    ->get();
+
+                                $total_work_hours = 0;
+
+                                foreach ($timekeeping as $tk) {
+                                    if ($tk->absent == 0) {
+                                        $total_work_hours += floatval($tk->regular_work);
+                                        $total_work_hours += floatval($tk->regular_leave) + floatval($tk->sick_leave);
+                                    }
+                                }
+
+                                $bp_days = $total_work_hours / 8;
+                            }
+                            
                         }
+
                     }
                     $excel["Basic Pay"] = $basic_pay_amount;
                     $excel["Total Days"] = $bp_days;
+
                     // ABSENT
                     $deduction_data = $this->search_to_array($data_deductions, "emp_id", $emp_id);
                     $absent_amt = $this->search_to_array($deduction_data, "type", "ABSENT");
                     $absent_amt_val = count($absent_amt) > 0 ? $absent_amt[0]["amount"] : 0;
+
                     $excel["ABSENT"] = $absent_amt_val;
                     // LATE
                     $late_data = $this->search_to_array($data_deductions, "emp_id", $emp_id);
                     $late_amt = $this->search_to_array($late_data,"type", "LATE");
                     $late_amt_val = count($late_amt) > 0 ? $late_amt[0]["amount"] : 0;
+                    if($late_amt_val > 0){
+                        $late_amt_val = round($late_amt_val);
+                    }
                     $excel["LATE"] = $late_amt_val;
                     // UNDERTIME
                     $ut_amt = $this->search_to_array($late_data,"type", "UT");
@@ -1005,10 +1037,14 @@ class reportController extends Controller
                     array_push($excel_data, $excel);
                 }
                 $with_rice_allowance = in_array($payroll->branch_id, [59,90,57]); //Bicol,Laguna(Team Dante), Batangas
-                $rice_allowance_amount = 1500;
+                $rice_allowance_amount =
+                    (!empty($payroll->rice_allowance_amount)
+                        && $payroll->rice_allowance_amount > 0)
+                    ? $payroll->rice_allowance_amount
+                    : 1500;
                 $excel_data = collect($excel_data);
                 $total_net_pay = $excel_data->sum('net_pay');
-                if($with_rice_allowance){
+                if($payroll->rice_allowance == 1){
                     $rice_row = [];
                     foreach ($header as $head) {
                         if (strtolower($head) === "total deduction") {
@@ -1044,9 +1080,28 @@ class reportController extends Controller
                 $cover_to = $payroll->cover_to;
                 $period = 'Period: ' . date('F d', strtotime($cover_from)) . ' - ' . date('F d, Y', strtotime($cover_to));
                 $pay_date = 'Pay Date: ' . date('F d, Y');
+                // sanitize payroll name for file system
+                $raw_name = $payroll->name;
+
+                // replace invalid filename characters
+                $safe_name = preg_replace('/[\/\\\\:*?"<>|]/', '', $raw_name);
+
+                // replace spaces with underscore (optional but recommended)
+                $safe_name = preg_replace('/\s+/', '_', $safe_name);
+
+                // trim extra underscores
+                $safe_name = trim($safe_name, '_');
+
+                // fallback if empty
+                if(empty($safe_name)){
+                    $safe_name = 'Payroll_Report';
+                }
+
+                // final filename
+                $file_name = $safe_name . ".xlsx";
                 return Excel::download(
                     new PayrollExportExcel($excel_data, $header, $company_name, $period, $pay_date),
-                    $payroll->name . ".xlsx"
+                    $file_name
                 );
         }
         
