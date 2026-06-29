@@ -30,8 +30,9 @@ class DisciplinaryController extends Controller
             // Get employee ID from the logged-in user
             $employee = Employee::where('user_id', auth()->id())->first();
             $role_id = Auth::user()->role_id;
+            $role_id_all = [1,4,5,27]; //all access
             
-            if ((auth()->user()->role_id == 1 || auth()->user()->role_id == 27) && !$isReadOnly) {
+            if (in_array($role_id,$role_id_all) && !$isReadOnly) {
                 // Admin and role_id 27 view (non-read-only) - show all parent notes and employees
                 $employees = Employee::all();
                 $noteQuery = DisciplinaryNote::whereNull('parent_id')->with(['employee', 'replies.employee'])->whereNotNull('employee_id');
@@ -54,19 +55,20 @@ class DisciplinaryController extends Controller
                 $query = Employee::where('is_active', 1);
                 $noteQuery = DisciplinaryNote::with(['employee', 'replies.employee'])->whereNull('parent_id')->whereNotNull('employee_id');
                 
-                if ($role_id === 4) { // HR Group D
-                    $employees = $query->where(function ($q) {
-                        $q->where("hr_group", "group_d")
-                        ->orWhere("user_id", Auth::user()->id);
-                    })->get();
-                    $noteQuery->whereIn('employee_id', $employees->pluck('id'));
-                } elseif ($role_id === 5) { // HR Group B,C,E
-                    $employees = $query->where(function ($q) {
-                        $q->whereIn("hr_group", ["group_b","group_c","group_e"])
-                        ->orWhere("user_id", Auth::user()->id);
-                    })->get();
-                    $noteQuery->whereIn('employee_id', $employees->pluck('id'));
-                } elseif ($role_id === 14) { // HR Group B,C
+                // if ($role_id === 4) { // HR Group D
+                //     $employees = $query->where(function ($q) {
+                //         $q->where("hr_group", "group_d")
+                //         ->orWhere("user_id", Auth::user()->id);
+                //     })->get();
+                //     $noteQuery->whereIn('employee_id', $employees->pluck('id'));
+                // } elseif ($role_id === 5) { // HR Group B,C,E
+                //     $employees = $query->where(function ($q) {
+                //         $q->whereIn("hr_group", ["group_b","group_c","group_e"])
+                //         ->orWhere("user_id", Auth::user()->id);
+                //     })->get();
+                //     $noteQuery->whereIn('employee_id', $employees->pluck('id'));
+                // } else
+                if ($role_id === 14) { // HR Group B,C
                     $employees = $query->where(function ($q) {
                         $q->whereIn("hr_group", ["group_b","group_c"])
                         ->orWhere("user_id", Auth::user()->id);

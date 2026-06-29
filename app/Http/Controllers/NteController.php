@@ -37,7 +37,8 @@ class NteController extends Controller
             $nteNotesQuery = NteNote::with(['employee', 'replies.employee'])->whereNull('parent_id');
             
             if ($canCreateNte && !$isReadOnly) {
-                if ($role_id == 1 || $role_id == 27) {
+                $role_id_all = [1,4,5,27]; //all access
+                if (in_array($role_id,$role_id_all)) {
                     // Admin and role_id 27 see all employees and all notes
                     $employees = Employee::all();
                     $nteNotes = $nteNotesQuery->latest()->get();
@@ -46,19 +47,20 @@ class NteController extends Controller
                     $assignedGroups = [];
                     $query = Employee::query();
                     
-                    if ($role_id === 4) { // HR Group D
-                        $assignedGroups = ["group_d"];
-                        $query->where(function ($q) {
-                            $q->where("hr_group", "group_d")
-                            ->orWhere("user_id", Auth::user()->id);
-                        });
-                    } elseif ($role_id === 5) { // HR Group B,C,E
-                        $assignedGroups = ["group_b", "group_c", "group_e"];
-                        $query->where(function ($q) {
-                            $q->whereIn("hr_group", ["group_b","group_c","group_e"])
-                            ->orWhere("user_id", Auth::user()->id);
-                        });
-                    } elseif ($role_id === 14) { // HR Group B,C
+                    // if ($role_id === 4) { // HR Group D
+                    //     $assignedGroups = ["group_d"];
+                    //     $query->where(function ($q) {
+                    //         // $q->where("hr_group", "group_d")
+                    //         // ->orWhere("user_id", Auth::user()->id);
+                    //     });
+                    // } elseif ($role_id === 5) { // HR Group B,C,E
+                    //     $assignedGroups = ["group_b", "group_c", "group_e"];
+                    //     $query->where(function ($q) {
+                    //         // $q->whereIn("hr_group", ["group_b","group_c","group_e"])
+                    //         // ->orWhere("user_id", Auth::user()->id);
+                    //     });
+                    // } else
+                    if ($role_id === 14) { // HR Group B,C
                         $assignedGroups = ["group_b", "group_c"];
                         $query->where(function ($q) {
                             $q->whereIn("hr_group", ["group_b","group_c"])

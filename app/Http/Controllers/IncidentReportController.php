@@ -31,20 +31,21 @@ class IncidentReportController extends Controller
         
         // Filter employees based on role-based group management
         $query = Employee::where('tbl_employee.is_active', 1);
+        $role_id_all = [1,4,5,27]; //all access
         
-        if ($role_id === 1 || $role_id === 27) {
+        if (in_array($role_id,$role_id_all)) {
             // Admin and role_id 27 see all employees
             $employees = $query->get();
-        } elseif ($role_id === 4) { // HR Group D
-            $employees = $query->where(function ($q) {
-                $q->where("tbl_employee.hr_group", "group_d")
-                ->orWhere("tbl_employee.user_id", Auth::user()->id);
-            })->get();
-        } elseif ($role_id === 5) { // HR Group B,C,E
-            $employees = $query->where(function ($q) {
-                $q->whereIn("tbl_employee.hr_group", ["group_b","group_c","group_e"])
-                ->orWhere("tbl_employee.user_id", Auth::user()->id);
-            })->get();
+        // } elseif ($role_id === 4) { // HR Group D
+        //     $employees = $query->where(function ($q) {
+        //         $q->where("tbl_employee.hr_group", "group_d")
+        //         ->orWhere("tbl_employee.user_id", Auth::user()->id);
+        //     })->get();
+        // } elseif ($role_id === 5) { // HR Group B,C,E
+        //     $employees = $query->where(function ($q) {
+        //         $q->whereIn("tbl_employee.hr_group", ["group_b","group_c","group_e"])
+        //         ->orWhere("tbl_employee.user_id", Auth::user()->id);
+        //     })->get();
         } elseif ($role_id === 14) { // HR Group B,C
             $employees = $query->where(function ($q) {
                 $q->whereIn("tbl_employee.hr_group", ["group_b","group_c"])
@@ -108,23 +109,23 @@ class IncidentReportController extends Controller
             $reportQuery = IncidentReport::with(['reportedByEmployee', 'disciplinaryNote']);
             
             // Filter by role-based groups
-            if ($role_id === 1 || $role_id === 27) {
+            if (in_array($role_id,$role_id_all)) {
                 // Admin and role_id 27 see all reports
                 $reportQuery = $reportQuery;
-            } elseif ($role_id === 4) { // HR Group D
-                $reportQuery = $reportQuery->whereHas('reportedByEmployee', function($q) {
-                    $q->where(function($subQ) {
-                        $subQ->where("hr_group", "group_d")
-                        ->orWhere("user_id", Auth::user()->id);
-                    });
-                });
-            } elseif ($role_id === 5) { // HR Group B,C,E
-                $reportQuery = $reportQuery->whereHas('reportedByEmployee', function($q) {
-                    $q->where(function($subQ) {
-                        $subQ->whereIn("hr_group", ["group_b","group_c","group_e"])
-                        ->orWhere("user_id", Auth::user()->id);
-                    });
-                });
+            // } elseif ($role_id === 4) { // HR Group D
+            //     $reportQuery = $reportQuery->whereHas('reportedByEmployee', function($q) {
+            //         $q->where(function($subQ) {
+            //             $subQ->where("hr_group", "group_d")
+            //             ->orWhere("user_id", Auth::user()->id);
+            //         });
+            //     });
+            // } elseif ($role_id === 5) { // HR Group B,C,E
+            //     $reportQuery = $reportQuery->whereHas('reportedByEmployee', function($q) {
+            //         $q->where(function($subQ) {
+            //             $subQ->whereIn("hr_group", ["group_b","group_c","group_e"])
+            //             ->orWhere("user_id", Auth::user()->id);
+            //         });
+            //     });
             } elseif ($role_id === 14) { // HR Group B,C
                 $reportQuery = $reportQuery->whereHas('reportedByEmployee', function($q) {
                     $q->where(function($subQ) {
