@@ -10,6 +10,7 @@ use DateTime;
 use DateTimeZone;
 use Yajra\DataTables\DataTables;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use App\Exports\FaceTimeAuditExport;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -224,6 +225,11 @@ class facetimeauditController extends Controller
                 $end_date . ' 23:59:59'
             ]);
 
+        // If an employee is selected, only delete that employee's images
+        if ($request->filled('emp_code') && $request->emp_code != "0") {
+            $logs->where('emp_id', $request->emp_code);
+        }
+
         $rows = $logs->select("id", "image")->get();
         $faceImagesRoot = $this->normalizePath($faceRoot . DIRECTORY_SEPARATOR . $facePath);
         $deletedFiles = 0;
@@ -232,32 +238,46 @@ class facetimeauditController extends Controller
         $clearedRows = 0;
 
         foreach ($rows as $row) {
-            $relativePath = parse_url($row->image, PHP_URL_PATH) ?: $row->image;
-            $relativePath = ltrim($relativePath, "/\\");
-            $fullPath = $this->normalizePath($faceRoot . DIRECTORY_SEPARATOR . $relativePath);
 
-            if (!$this->isPathInside($fullPath, $faceImagesRoot)) {
-                $skippedFiles++;
-                continue;
-            }
+            $response = Http::timeout(30)
+                ->post(env('FACE_API_URL'), [
+                    'image' => $row->image,
+                    'token' => env('FACE_API_TOKEN')
+                ]);
 
-            if (file_exists($fullPath) && is_file($fullPath)) {
-                if (@unlink($fullPath)) {
-                    $deletedFiles++;
-                } else {
-                    $skippedFiles++;
-                    continue;
-                }
+            if ($response->successful() && ($response->json()['success'] ?? false)) {
+
+                DB::connection("intra_payroll")
+                    ->table("tbl_face_time_audit")
+                    ->where("id", $row->id)
+                    ->update([
+                        "image" => ""
+                    ]);
+
+                $deletedFiles++;
+                $clearedRows++;
+
             } else {
-                $missingFiles++;
+
+                $body = $response->json();
+
+                if (($body['message'] ?? '') == 'File not found.') {
+
+                    DB::connection("intra_payroll")
+                        ->table("tbl_face_time_audit")
+                        ->where("id", $row->id)
+                        ->update([
+                            "image" => ""
+                        ]);
+
+                    $missingFiles++;
+                    $clearedRows++;
+
+                } else {
+
+                    $skippedFiles++;
+                }
             }
-
-            DB::connection("intra_payroll")
-                ->table("tbl_face_time_audit")
-                ->where("id", $row->id)
-                ->update(["image" => ""]);
-
-            $clearedRows++;
         }
 
         return response()->json([

@@ -353,14 +353,21 @@
 
         @if(Auth::user()->role_id == 1)
         $("#delete-images-btn").on("click", function() {
+
             var dateRange = $('#date_range').val();
+            var empCode = $('#emp_list').val();
 
             if (!dateRange) {
                 alert('Please select a date range before deleting images.');
                 return;
             }
 
-            if (!confirm('Delete FaceTime images for all employees in the selected date range? The log records will remain.')) {
+            var confirmMessage =
+                (empCode && empCode != "0")
+                ? "Delete FaceTime images only for the selected employee in the selected date range? The log records will remain."
+                : "Delete FaceTime images for ALL employees in the selected date range? The log records will remain.";
+
+            if (!confirm(confirmMessage)) {
                 return;
             }
 
@@ -370,7 +377,8 @@
                 dataType: "json",
                 data: {
                     "_token": "{{ csrf_token() }}",
-                    "date_range": dateRange
+                    "date_range": dateRange,
+                    "emp_code": empCode
                 },
                 success: function(response) {
                     alert(
@@ -379,6 +387,7 @@
                         response.missing_files + ' file(s) were already missing. ' +
                         response.skipped_files + ' file(s) skipped.'
                     );
+
                     loadFaceTimeAuditImages();
                 },
                 error: function(xhr) {
@@ -391,6 +400,7 @@
                     alert(message);
                 }
             });
+
         });
         @endif
 
