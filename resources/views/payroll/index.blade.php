@@ -49,6 +49,37 @@
        
     </div>
 </div>
+<div id="payroll_loading_overlay" style="
+    display:none;
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background:rgba(0,0,0,0.65);
+    z-index:99999;
+    align-items:center;
+    justify-content:center;
+">
+    <div style="
+        background:#fff;
+        padding:30px 40px;
+        border-radius:12px;
+        text-align:center;
+        min-width:300px;
+        box-shadow:0 5px 20px rgba(0,0,0,0.3);
+    ">
+        <div class="spinner-border text-primary mb-3" style="width:3rem;height:3rem;"></div>
+
+        <h5 id="payroll_loading_text" style="font-weight:bold;color:#222;">
+            Processing...
+        </h5>
+
+        <small style="color:#666;">
+            Please wait. Do not refresh or close this page.
+        </small>
+    </div>
+</div>
  
 @endif
 @stop
@@ -985,41 +1016,60 @@
         }
         function process_timecard(id){
             $.confirm({
-                                title: 'Payroll',
-                                content: 'Proccess Timecard?',
-                                escapeKey: 'cancelAction',
-                                buttons: {
-                                    confirm: {
-                                        btnClass: 'btn-green',
-                                        text: 'Yes',
-                                        action: function(){
-                                            
-                                            $.ajax({
-                                                url: "{{route('payroll_process_timecard')}}",
-                                                data: {
-                                                    pay_id: id,
-                                                    _token : "{{csrf_token()}}", 
-                                                },
-                                                    success: function (data) { 
-                                                        $.notify(data, {type:"info",icon:"info"}); 
-                                                        payroll_list();
-                                                    },
-                                                    dataType: 'json',
-                                                    method: 'POST'
-                                                });
-                                        
-                                         }
-                                        
+                title: 'Payroll',
+                content: 'Proccess Timecard?',
+                escapeKey: 'cancelAction',
+                buttons: {
+                    confirm: {
+                        btnClass: 'btn-green',
+                        text: 'Yes',
+                        action: function(){
+
+                            showPayrollLoading("Processing timecard...");
+                            
+                            $.ajax({
+                                url: "{{route('payroll_process_timecard')}}",
+                                data: {
+                                    pay_id: id,
+                                    _token : "{{csrf_token()}}", 
+                                },
+                                    success: function (data) { 
+                                        $.notify(data, {type:"info",icon:"info"}); 
+                                        payroll_list();
                                     },
-                                    cancelAction: {
-                                        btnClass: 'btn-gray',
-                                        text: 'No',
-                                        action: function(){
-                                        
-                                        }  
-                                    }
-                                }
-                            });
+                                    error: function () {
+                                        $.notify("Something went wrong while processing timecard.", {
+                                            type:"danger",
+                                            icon:"danger"
+                                        });
+                                    },
+                                    complete: function () {
+                                        hidePayrollLoading();
+                                    },
+                                    dataType: 'json',
+                                    method: 'POST'
+                                });
+                        
+                            }
+                        
+                    },
+                    cancelAction: {
+                        btnClass: 'btn-gray',
+                        text: 'No',
+                        action: function(){
+                        
+                        }  
+                    }
+                }
+            });
+        }
+        function showPayrollLoading(message = "Processing...") {
+            $("#payroll_loading_text").text(message);
+            $("#payroll_loading_overlay").css("display", "flex");
+        }
+
+        function hidePayrollLoading() {
+            $("#payroll_loading_overlay").hide();
         }
         $('#manual_timekeeping').on('show.bs.modal', function(e) {
             var pay_id = $(e.relatedTarget).data('pay_id');
@@ -1257,95 +1307,139 @@
                 $("#select_employee_div").show("fast");
             }
         });
-        function trigger_pay_process(pay_id){
-           
+        function trigger_pay_process(pay_id, jc = null){
+
+            if(jc){
+                jc.setContent(`
+                    <div class="text-center p-3">
+                        <div class="spinner-border text-success mb-3"></div>
+                        <h5>Processing payroll...</h5>
+                        <small>Please wait. Do not refresh or close this page.</small>
+                    </div>
+                `);
+            }else{
+                showPayrollLoading("Processing payroll...");
+            }
+
             $.ajax({
                 url: "{{route('payroll_process')}}",
                 data: {
                     pay_id: pay_id,
-                    _token : "{{csrf_token()}}", 
+                    _token : "{{csrf_token()}}",
                 },
-                    success: function (data) { 
-                        $.notify(data, {type:"info",icon:"info"}); 
-                        payroll_list();
-                    },
-                    dataType: 'json',
-                    method: 'POST'
-                });
+                success: function (data) {
+                    $.notify(data, {type:"info", icon:"info"});
+                    payroll_list();
+                },
+                error: function () {
+                    $.notify("Something went wrong while processing payroll.", {
+                        type:"danger",
+                        icon:"danger"
+                    });
+                },
+                complete: function () {
+                    if(jc){
+                        jc.close();
+                    }else{
+                        hidePayrollLoading();
+                    }
+                },
+                dataType: 'json',
+                method: 'POST'
+            });
         }
         function process_payroll(pay_id){
             $.confirm({
-                                title: 'Payroll',
-                                content: 'Proccess Payroll?',
-                                escapeKey: 'cancelAction',
-                                buttons: {
-                                    confirm: {
-                                        btnClass: 'btn-green',
-                                        text: 'Yes',
-                                        action: function(){
-                                            
-                                            $.ajax({
-                                                url: "{{route('check_payroll_data')}}",
-                                                data: {
-                                                    pay_id: pay_id,
-                                                    _token : "{{csrf_token()}}", 
+                title: 'Payroll',
+                content: 'Process Payroll?',
+                escapeKey: 'cancelAction',
+                buttons: {
+                    confirm: {
+                        btnClass: 'btn-green',
+                        text: 'Yes',
+                        action: function(){
+
+                            var jc = this;
+
+                            jc.buttons.confirm.disable();
+                            jc.buttons.cancelAction.disable();
+
+                            jc.setContent(`
+                                <div class="text-center p-3">
+                                    <div class="spinner-border text-primary mb-3"></div>
+                                    <h5>Checking payroll data...</h5>
+                                    <small>Please wait. Do not refresh or close this page.</small>
+                                </div>
+                            `);
+
+                            $.ajax({
+                                url: "{{route('check_payroll_data')}}",
+                                data: {
+                                    pay_id: pay_id,
+                                    _token : "{{csrf_token()}}",
+                                },
+                                dataType: 'json',
+                                method: 'POST',
+                                success: function (data) {
+
+                                    if(data == "timekeeping_404"){
+
+                                        jc.close();
+
+                                        $.confirm({
+                                            title: 'Time Keeping Error',
+                                            content: 'Process Payroll even without data on Timekeeping?',
+                                            buttons: {
+                                                confirm: {
+                                                    btnClass: 'btn-green',
+                                                    text: 'Yes',
+                                                    action: function(){
+                                                        trigger_pay_process(pay_id);
+                                                    }
                                                 },
-                                                    success: function (data) { 
-                                                 
-                                                        if(data == "timekeeping_404"){
-                                                            $.confirm({
-                                                                title: 'Time Keeping Error',
-                                                                content: 'Process Payroll Even without data on Timekeeping?',
-                                                                escapeKey: 'cancelAction',
-                                                                buttons: {
-                                                                    confirm: {
-                                                                        btnClass: 'btn-green',
-                                                                        text: 'Yes',
-                                                                        action: function(){
-                                                                            trigger_pay_process(pay_id);
-                                                                        }
-                                                                        
-                                                                    },
-                                                                    cancelAction: {
-                                                                        btnClass: 'btn-gray',
-                                                                        text: 'No',
-                                                                        action: function(){
-                                                                        
-                                                                        }  
-                                                                    }
-                                                                }
-                                                            });
-                                                        }else if(data == "success"){
-                                                            trigger_pay_process(pay_id);
-                                                        }else{
-                                                            $.notify(data, {type:"danger",icon:"danger"}); 
-                                                        }
-                                                     
-                                                        
-                                                    },
-                                                    dataType: 'json',
-                                                    method: 'POST'
-                                                });
-                                        
-                                        
-                                        
-                                        
-                                        
-                                        
-                                        
-                                        
-                                         }
-                                        
-                                    },
-                                    cancelAction: {
-                                        btnClass: 'btn-gray',
-                                        text: 'No',
-                                        action: function(){
-                                        
-                                        }  
+                                                cancelAction: {
+                                                    btnClass: 'btn-gray',
+                                                    text: 'No'
+                                                }
+                                            }
+                                        });
+
+                                    }else if(data == "success"){
+
+                                        jc.setContent(`
+                                            <div class="text-center p-3">
+                                                <div class="spinner-border text-success mb-3"></div>
+                                                <h5>Processing payroll...</h5>
+                                                <small>Please wait. This may take a while.</small>
+                                            </div>
+                                        `);
+
+                                        trigger_pay_process(pay_id, jc);
+
+                                    }else{
+
+                                        jc.close();
+                                        $.notify(data, {type:"danger", icon:"danger"});
                                     }
+                                },
+                                error: function () {
+                                    jc.close();
+                                    $.notify("Something went wrong while checking payroll data.", {
+                                        type:"danger",
+                                        icon:"danger"
+                                    });
                                 }
                             });
+
+                            return false;
+                        }
+                    },
+                    cancelAction: {
+                        btnClass: 'btn-gray',
+                        text: 'No'
+                    }
+                }
+            });
         }
         $("#include").on("click", function(){
             var filter = $("#filter").val();

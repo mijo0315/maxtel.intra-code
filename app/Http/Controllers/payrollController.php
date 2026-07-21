@@ -2473,7 +2473,7 @@ class payrollController extends Controller
                                     $department_sched_id = $this->search_multi_array($tbl_department, "id", $emp_data["department"]);
                                     $branch_sched_id = $this->search_multi_array($tbl_branch, "id", $emp_data["branch_id"]);
                                  
-                                        if($position_sched_id["schedule_id"] != "0"){
+                                        if(isset($position_sched_id["schedule_id"]) && $position_sched_id["schedule_id"] != "0"){
                                             $sched_id = $position_sched_id["schedule_id"];
                                             $lib_sched = $this->get_schedule_data($sched_id, $day_name);
                                             if($lib_sched != "RD"){
@@ -2498,7 +2498,7 @@ class payrollController extends Controller
                                                 $required_hours = "0";
                                             }
                                         }else{
-                                            if($designation_sched_id["schedule_id"] != "0"){
+                                            if(isset($designation_sched_id["schedule_id"]) && $designation_sched_id["schedule_id"] != "0"){
                                                 $sched_id = $designation_sched_id["schedule_id"];
                                                 $lib_sched = $this->get_schedule_data($sched_id, $day_name);
                                                 if($lib_sched != "RD"){
@@ -2523,7 +2523,7 @@ class payrollController extends Controller
                                                     $required_hours = "0";
                                                 }
                                             }else{
-                                                if($department_sched_id["schedule_id"] != "0"){
+                                                if(isset($department_sched_id["schedule_id"]) && $department_sched_id["schedule_id"] != "0"){
                                                     $sched_id = $department_sched_id["schedule_id"];
                                                     $lib_sched = $this->get_schedule_data($sched_id, $day_name);
                                                     if($lib_sched != "RD"){
@@ -2548,7 +2548,7 @@ class payrollController extends Controller
                                                         $required_hours = "0";
                                                     }
                                                 }else{
-                                                    if($branch_sched_id["schedule_id"] != "0"){
+                                                    if(isset($branch_sched_id["schedule_id"]) && $branch_sched_id["schedule_id"] != "0"){
                                                         $sched_id = $branch_sched_id["schedule_id"];
                                                         $lib_sched = $this->get_schedule_data($sched_id, $day_name);
                                                         if($lib_sched != "RD"){
