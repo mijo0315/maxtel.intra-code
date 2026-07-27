@@ -4688,103 +4688,103 @@ class payrollController extends Controller
 
     public function save_salary_increase(Request $request)
     {
-
         $payroll = DB::connection("intra_payroll")
             ->table("tbl_payroll")
             ->where("id", $request->pay_id)
             ->first();
 
-
-        if(!$payroll){
+        if (!$payroll) {
             return "Payroll not found";
         }
 
-
         $employee_ids = explode(
             ";",
-            str_replace("|","",$payroll->employee)
+            str_replace("|", "", $payroll->employee)
         );
 
+        DB::beginTransaction();
 
-        foreach($employee_ids as $emp_id){
+        try {
 
+            foreach ($employee_ids as $emp_id) {
 
-            $emp = DB::connection("intra_payroll")
-                ->table("tbl_employee")
-                ->where("id",$emp_id)
-                ->first();
+                if (empty($emp_id)) {
+                    continue;
+                }
 
+                $emp = DB::connection("intra_payroll")
+                    ->table("tbl_employee")
+                    ->where("id", $emp_id)
+                    ->first();
 
+                if (!$emp) {
+                    continue;
+                }
 
-            if(!$emp){
-                continue;
-            }
+                // MWE only
+                if ($emp->is_mwe != 1) {
+                    continue;
+                }
 
+                // DAILY or MONTHLY only
+                if (!in_array($emp->salary_type, ["DAILY", "MONTHLY"])) {
+                    continue;
+                }
 
+                /*
+                |--------------------------------------------------------------------------
+                | Count eligible worked days
+                |--------------------------------------------------------------------------
+                */
 
-            // Salary increase applies only DAILY + MWE
-            if(
-                $emp->salary_type != "DAILY" ||
-                $emp->is_mwe != 1
-            ){
-                continue;
-            }
-
-
-
-            // Get actual worked days
-            $attendance = DB::connection("intra_payroll")
-                ->table("tbl_timekeeping")
-                ->where("emp_id",$emp_id)
-                ->whereBetween(
-                    "date_target",
-                    [
+                $attendanceQuery = DB::connection("intra_payroll")
+                    ->table("tbl_timekeeping")
+                    ->where("emp_id", $emp_id)
+                    ->whereBetween("date_target", [
                         $request->from,
                         $request->to
-                    ]
-                )
-                ->where(
-                    "regular_work",
-                    ">",
-                    0
-                )
-                ->count();
+                    ])
+                    ->where("regular_work", ">", 0);
 
+                // MONTHLY employees:
+                // Exclude days with absent hours
+                if ($emp->salary_type == "MONTHLY") {
+                    $attendanceQuery->where("absent", 0);
+                }
 
+                $attendance = $attendanceQuery->count();
 
-            if($attendance <= 0){
-                continue;
+                if ($attendance <= 0) {
+                    continue;
+                }
+
+                $total = $request->amount * $attendance;
+
+                DB::connection("intra_payroll")
+                    ->table("tbl_payroll_income")
+                    ->updateOrInsert(
+                        [
+                            "payroll_id" => $request->pay_id,
+                            "emp_id"     => $emp_id,
+                            "type"       => "Salary Increase"
+                        ],
+                        [
+                            "amount"       => $total,
+                            "date_created" => date("Y-m-d"),
+                            "user_id"      => Auth::user()->id
+                        ]
+                    );
             }
 
+            DB::commit();
 
+            return "Salary Increase successfully updated.";
 
-            $total = $request->amount * $attendance;
+        } catch (\Throwable $th) {
 
+            DB::rollback();
 
-
-            DB::connection("intra_payroll")
-                ->table("tbl_payroll_income")
-                ->updateOrInsert(
-
-                    [
-                        "payroll_id" => $request->pay_id,
-                        "emp_id" => $emp_id,
-                        "type" => "Salary Increase"
-                    ],
-
-                    [
-                        "amount" => $total,
-                        "date_created" => date("Y-m-d"),
-                        "user_id" => Auth::user()->id
-                    ]
-
-                );
-
-
+            return $th->getMessage();
         }
-
-
-        return "Salary Increase successfully updated";
-
     }
 }
