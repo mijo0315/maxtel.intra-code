@@ -44,6 +44,7 @@
             @include("payroll.uploadOtherIncomeModal")
             @include("payroll.uploadDeductionModal")
             @include("payroll.credit_adjustmentModal")
+            @include("payroll.salaryIncreaseModal")
             
         </div>
        
@@ -1440,6 +1441,106 @@
                     }
                 }
             });
+        }
+        function salary_increase(pay_id)
+        {
+            $("#salary_pay_id").val(pay_id);
+
+            $("#salary_amount").val("");
+            $("#salary_from").val("");
+            $("#salary_to").val("");
+
+            $("#salaryIncreaseModal").modal("show");
+        }
+        function save_salary_increase()
+        {
+
+            let amount = $("#salary_amount").val();
+            let from = $("#salary_from").val();
+            let to = $("#salary_to").val();
+
+
+            if(amount == "" || amount <= 0){
+
+                $.notify("Please input Daily Increase Amount", {
+                    type:"danger"
+                });
+
+                $("#salary_amount").focus();
+                return false;
+
+            }
+
+
+            if(from == ""){
+
+                $.notify("Please select From date", {
+                    type:"danger"
+                });
+
+                $("#salary_from").focus();
+                return false;
+
+            }
+
+
+            if(to == ""){
+
+                $.notify("Please select To date", {
+                    type:"danger"
+                });
+
+                $("#salary_to").focus();
+                return false;
+
+            }
+
+
+            if(new Date(from) > new Date(to)){
+
+                $.notify("From date cannot be greater than To date", {
+                    type:"danger"
+                });
+
+                return false;
+
+            }
+
+
+
+            $.ajax({
+
+                url:"{{route('save_salary_increase')}}",
+
+                type:"POST",
+
+                data:{
+                    _token:"{{csrf_token()}}",
+
+                    pay_id:$("#salary_pay_id").val(),
+
+                    amount:amount,
+
+                    from:from,
+
+                    to:to
+                },
+
+                success:function(data){
+
+                    $.notify(data,{
+                        type:"info"
+                    });
+
+
+                    $("#salaryIncreaseModal").modal("hide");
+                    payroll_list();
+
+                }
+
+            });
+
+
         }
         $("#include").on("click", function(){
             var filter = $("#filter").val();

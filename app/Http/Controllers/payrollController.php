@@ -4084,6 +4084,12 @@ class payrollController extends Controller
                                                     onclick='open_credit_adj_modal(".$row->id.")'>
                                                     Credit Adjustment $badge
                                                 </button>";
+                                                $btn .= "<br>
+                                                <button 
+                                                    onclick='salary_increase(".$row->id.")' 
+                                                    class='btn btn-sm btn-warning mb-1 w-100'>
+                                                    Salary Increase
+                                                </button>";
                                                 $btn .= "<br><button onclick='push_for_approval(".$row->id.")' class='btn btn-sm btn-info mb-1 w-100' 
                                                 > Post for Approval </button>";
                                                 $btn .= "<br><button  onclick='export_payroll($row->id)' class='export_payroll btn btn-success btn-sm w-100 mb-1'>Payroll Report</button>";
@@ -4678,5 +4684,107 @@ class payrollController extends Controller
             ->get();
 
         return response()->json($employee_list);
+    }
+
+    public function save_salary_increase(Request $request)
+    {
+
+        $payroll = DB::connection("intra_payroll")
+            ->table("tbl_payroll")
+            ->where("id", $request->pay_id)
+            ->first();
+
+
+        if(!$payroll){
+            return "Payroll not found";
+        }
+
+
+        $employee_ids = explode(
+            ";",
+            str_replace("|","",$payroll->employee)
+        );
+
+
+        foreach($employee_ids as $emp_id){
+
+
+            $emp = DB::connection("intra_payroll")
+                ->table("tbl_employee")
+                ->where("id",$emp_id)
+                ->first();
+
+
+
+            if(!$emp){
+                continue;
+            }
+
+
+
+            // Salary increase applies only DAILY + MWE
+            if(
+                $emp->salary_type != "DAILY" ||
+                $emp->is_mwe != 1
+            ){
+                continue;
+            }
+
+
+
+            // Get actual worked days
+            $attendance = DB::connection("intra_payroll")
+                ->table("tbl_timekeeping")
+                ->where("emp_id",$emp_id)
+                ->whereBetween(
+                    "date_target",
+                    [
+                        $request->from,
+                        $request->to
+                    ]
+                )
+                ->where(
+                    "regular_work",
+                    ">",
+                    0
+                )
+                ->count();
+
+
+
+            if($attendance <= 0){
+                continue;
+            }
+
+
+
+            $total = $request->amount * $attendance;
+
+
+
+            DB::connection("intra_payroll")
+                ->table("tbl_payroll_income")
+                ->updateOrInsert(
+
+                    [
+                        "payroll_id" => $request->pay_id,
+                        "emp_id" => $emp_id,
+                        "type" => "Salary Increase"
+                    ],
+
+                    [
+                        "amount" => $total,
+                        "date_created" => date("Y-m-d"),
+                        "user_id" => Auth::user()->id
+                    ]
+
+                );
+
+
+        }
+
+
+        return "Salary Increase successfully updated";
+
     }
 }
