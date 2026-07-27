@@ -4088,7 +4088,7 @@ class payrollController extends Controller
                                                 <button 
                                                     onclick='salary_increase(".$row->id.")' 
                                                     class='btn btn-sm btn-warning mb-1 w-100'>
-                                                    Salary Increase
+                                                    WO#27
                                                 </button>";
                                                 $btn .= "<br><button onclick='push_for_approval(".$row->id.")' class='btn btn-sm btn-info mb-1 w-100' 
                                                 > Post for Approval </button>";
