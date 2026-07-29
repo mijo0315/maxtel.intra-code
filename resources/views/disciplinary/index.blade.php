@@ -108,6 +108,7 @@
                                     <option value="30day_suspension">30 Day Suspension</option>
                                     <option value="30day_preventive_suspension">30 Day Preventive Suspension</option>
                                     <option value="end_of_contract">End of Contract(OEC)</option>
+                                    <option value="salary_deduction">Settlement through Salary Deduction</option>
                                     <option value="termination">For Termination</option>
                                  
                                 </select>

@@ -28,17 +28,22 @@ class AccountabilitiesController extends Controller
         $isReadOnly = $userPermission === '3' || (preg_match("/R/i", $userPermission ?? '') && !preg_match("/C|U/i", $userPermission ?? ''));
 
         // Check if user has access to this page - allow if user is staff or has permission
-        $hasAccess = isset(Auth::user()->access[$routeName]) || Auth::user()->role_id == 2;
+        // $hasAccess = isset(Auth::user()->access[$routeName]) || Auth::user()->role_id == 2;
+        $hasAccess = isset(Auth::user()->access[$routeName]) || in_array(Auth::user()->role_id, [2, 31]);
         
         if (!$hasAccess) {
             return redirect()->route('dashboard')->with('error', 'You do not have access to this page.');
         }
 
         // Check if user can create accountabilities (role_id 2 cannot create)
-        $canCreateAccountability = auth()->user()->role_id != 2;
+        // $canCreateAccountability = auth()->user()->role_id != 2;
+        $canCreateAccountability = auth()->user()->role_id == 31 || auth()->user()->role_id != 2;
         
         // For staff/employees (role_id == 2) or read-only users, redirect to their own accountabilities view
-        if (!$canCreateAccountability || $isReadOnly) {
+        // if (!$canCreateAccountability || $isReadOnly) {
+        //     return redirect()->route('my_accountabilities');
+        // }
+        if (Auth::user()->role_id != 31 && (!$canCreateAccountability || $isReadOnly)) {
             return redirect()->route('my_accountabilities');
         }
 
@@ -77,7 +82,8 @@ class AccountabilitiesController extends Controller
         Log::info('User access after ensureStaffPermission:', $access);
 
         // Check if user has access to this page or is staff (role_id = 2)
-        $hasAccess = Auth::user()->role_id == 2 || isset($access['list_of_accountabilities']);
+        // $hasAccess = Auth::user()->role_id == 2 || isset($access['list_of_accountabilities']);
+        $hasAccess = in_array(Auth::user()->role_id, [2, 31]) || isset($access['list_of_accountabilities']);
         
         if (!$hasAccess) {
             Log::warning('User ' . Auth::user()->id . ' does not have access to staffView. Role: ' . Auth::user()->role_id);
@@ -293,7 +299,7 @@ class AccountabilitiesController extends Controller
                 ]);
 
             // Filter by role-based group management
-            if ($role_id === 1 || $role_id === 27) {
+            if (in_array($role_id, [1, 27, 31])) {
                 // Admin sees all accountabilities
             } elseif ($role_id === 4) { // HR Group D
                 $query->where(function ($q) {
@@ -344,7 +350,7 @@ class AccountabilitiesController extends Controller
                 ->leftJoin('tbl_employee as e', 'a.employee_id', '=', 'e.id');
             
             // Apply role-based filtering to total count
-            if ($role_id === 1 || $role_id === 27) {
+            if (in_array($role_id, [1, 27, 31])) {
                 // Admin sees all accountabilities
             } elseif ($role_id === 4) { // HR Group D
                 $totalQuery->where(function ($q) {
@@ -536,7 +542,7 @@ class AccountabilitiesController extends Controller
                 ->select(['id', 'first_name', 'last_name', 'hr_group']);
             
             // Filter employees based on role_id and the groups this role manages
-            if ($role_id === 1 || $role_id === 27) {
+            if (in_array($role_id, [1, 27, 31])) {
                 // Admin sees all employees
                 $employees = $query->orderBy('first_name')->get();
             } elseif ($role_id === 4) { // HR Group D

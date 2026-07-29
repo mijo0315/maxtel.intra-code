@@ -7,11 +7,15 @@
 @section("content")
 @php
     $routeName = Route::current()->action["as"];
-    $hasReadPermission = isset(Auth::user()->access[$routeName]) && preg_match("/R/i", Auth::user()->access[$routeName]["access"]);
+    $isRole31 = Auth::user()->role_id == 31;
+    $hasReadPermission = $isRole31 || (
+        isset(Auth::user()->access[$routeName]) &&
+        preg_match("/R/i", Auth::user()->access[$routeName]["access"])
+    );
     $isEmployee = Auth::user()->role_id == 2;
 @endphp
 
-@if(!$hasReadPermission && !$isEmployee)
+@if(!$hasReadPermission && !$isEmployee && !$isRole31)
     <div class="page-wrapper">
         <div class="content container-fluid">
             <div class="row">
@@ -25,7 +29,15 @@
             </div>
         </div>
     </div>
-@elseif((Auth::user()->access[Route::current()->action["as"]]["user_type"] == "employee" && Auth::user()->role_id != 27) || Auth::user()->role_id == 2)
+@elseif(
+    !$isRole31 &&
+    (
+        (isset(Auth::user()->access[$routeName]) &&
+         Auth::user()->access[$routeName]["user_type"] == "employee" &&
+         Auth::user()->role_id != 27)
+        || Auth::user()->role_id == 2
+    )
+)
     <!-- Staff View - Show only their own accountabilities -->
     <div class="page-wrapper" id="staff_accountabilities_page">
         <div class="content container-fluid">
@@ -168,7 +180,13 @@
                     <div class="card-body">
                         <div class="row">
                             <div class="col-12">
-                                @if(preg_match("/C/i", Auth::user()->access[Route::current()->action["as"]]["access"]))
+                                @if(
+                                    $isRole31 ||
+                                    (
+                                        isset(Auth::user()->access[$routeName]) &&
+                                        preg_match("/C/i", Auth::user()->access[$routeName]["access"])
+                                    )
+                                )
                                     <div class="mb-3 d-flex flex-wrap gap-2">
                                         <button class="btn btn-primary btn-sm" id="addAccountabilityBtn">
                                             <i class="fa fa-plus"></i> Add Accountability
@@ -454,7 +472,14 @@
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
 @php
-    $isStaffOrEmployee = Auth::user()->role_id == 2 || (isset(Auth::user()->access[$routeName]) && Auth::user()->access[$routeName]["user_type"] == "employee" && Auth::user()->role_id != 27);
+    $isStaffOrEmployee =
+        Auth::user()->role_id == 2 ||
+        (
+            Auth::user()->role_id != 31 &&
+            isset(Auth::user()->access[$routeName]) &&
+            Auth::user()->access[$routeName]["user_type"] == "employee" &&
+            Auth::user()->role_id != 27
+        );
 @endphp
 
 <script>
