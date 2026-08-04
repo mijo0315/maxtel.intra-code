@@ -63,6 +63,19 @@
 @stop
 @section("scripts")
 <script>
+    var incomeTable;
+
+    $(document).ready(function() {
+
+        incomeTable = $('#income_file').DataTable({
+            autoWidth: true,
+            searchHighlight: true,
+            searching: true,
+            orderMulti: true,
+            pageLength: 10
+        });
+
+    });
 $('#add_edit_employee').on('show.bs.modal', function(e) {
                 //DEFAULT 
                 $(".btn-group .btn").attr("class", "btn btn-outline-primary ml-1");
@@ -74,7 +87,8 @@ $('#add_edit_employee').on('show.bs.modal', function(e) {
                 $("#save_oth_income").val(id);
                 $("#label_modal").empty().text("("+code+") " +name);
                 $("#income_type").val("0").change();
-                $("#income_file tbody").empty();
+                // $("#income_file tbody").empty();
+                incomeTable.clear().draw();
                 $("#amount_div").hide("fast");
                 $("#amount_div2").hide("fast");
                 $("#amount_div3").hide("fast");
@@ -116,8 +130,9 @@ $('#add_edit_employee').on('show.bs.modal', function(e) {
                                                     $("#custom_tbl").show("fast");
                                                     $("#include").show("fast");
                                                     $.each(source, function( index, value ) {
-                                                        var action = "<button onclick='delete_row("+value.emp_id+")' class='btn btn-warning tbl_emp' id='emp_id_"+value.emp_id+"' value='"+value.emp_id+"' > Delete</button>";
-                                                        var emp_name =   $("#selected_employee option[value="+value.emp_id+"]").text();
+                                                      //  var action = "<button onclick='delete_row("+value.emp_id+")' class='btn btn-warning tbl_emp' id='emp_id_"+value.emp_id+"' value='"+value.emp_id+"' > Delete</button>";
+                                                      var action = "<button onclick='delete_row(this,"+value.emp_id+")' class='btn btn-warning tbl_emp' id='emp_id_"+value.emp_id+"' value='"+value.emp_id+"'>Delete</button>";
+                                                      var emp_name =   $("#selected_employee option[value="+value.emp_id+"]").text();
                                                         var insert = "<tr id='tr_"+value.emp_id+"'>";
                                                             insert = insert + "<td id='td_name_"+value.emp_id+"'>"+emp_name+"</td>";
                                                             
@@ -151,7 +166,20 @@ $('#add_edit_employee').on('show.bs.modal', function(e) {
                                                             insert = insert + "</tr>";
                                                             
                                                             // alert(insert);
-                                                        $("#income_file tbody").append(insert);
+                                                        // $("#income_file tbody").append(insert);
+                                                            incomeTable.row.add([
+                                                                '<span class="emp_name">'+emp_name+'</span>',
+                                                                '<span class="income_type">'+value.income_type+'</span>',
+                                                                '<div class="amount_container" ' +
+                                                                    'data-amount="'+value.amount+'" ' +
+                                                                    'data-amount2="'+value.amount_2+'" ' +
+                                                                    'data-amount3="'+value.amount_3+'" ' +
+                                                                    'data-amount4="'+value.amount_4+'" ' +
+                                                                    'data-amount5="'+value.amount_5+'">' +
+                                                                    amount_data +
+                                                                '</div>',
+                                                                action
+                                                            ]).draw(false);
                                                         $("#selected_employee").find('[value="'+value.emp_id+'"]').remove();
                                                     });
                                                 }else{
@@ -201,33 +229,70 @@ $('#add_edit_employee').on('show.bs.modal', function(e) {
         var income_type = $("#income_type").val();
         var delimited = "";
         
-        if(select_emp == "custom_emp"){
+        // if(select_emp == "custom_emp"){
             
-            $(".tbl_emp").each(function () {
-                var indicator = $(this).val();
-                    if(delimited != ""){
-                        delimited = delimited + "|";
-                    }
-                    var label_amount = "";
-                    delimited = delimited + indicator + ";" + $("#td_type_"+indicator).text(); 
-                    var td_itype =  $("#td_type_"+indicator).text();
-                    if(td_itype == "DAILY"){
-                         label_amount = label_amount +  ";"+$("#label_amount_"+indicator).text();
-                    }else if(td_itype == "MONTHLY"){
-                         label_amount = label_amount + ";"+$("#label_amount_"+indicator).text();
-                    }else if(td_itype == "SEMI"){
-                         label_amount = label_amount +";"+$("#label_amount_"+indicator).text();
-                         label_amount = label_amount +";"+$("#label_amount2_"+indicator).text();
-                    }else if(td_itype == "WEEKLY"){
-                        label_amount = label_amount +";"+$("#label_amount_"+indicator).text();
-                        label_amount = label_amount +";"+$("#label_amount2_"+indicator).text();
-                        label_amount = label_amount +";"+$("#label_amount3_"+indicator).text();
-                        label_amount = label_amount +";"+$("#label_amount4_"+indicator).text();
-                        label_amount = label_amount +";"+$("#label_amount5_"+indicator).text();
-                    }
-                    delimited = delimited + label_amount;
+        //    var rows = incomeTable.rows().nodes();
+
+        //     $(rows).find(".tbl_emp").each(function () {
+        //         var indicator = $(this).val();
+        //             if(delimited != ""){
+        //                 delimited = delimited + "|";
+        //             }
+        //             var label_amount = "";
+        //             delimited = delimited + indicator + ";" + $("#td_type_"+indicator).text(); 
+        //             var td_itype =  $("#td_type_"+indicator).text();
+        //             if(td_itype == "DAILY"){
+        //                  label_amount = label_amount +  ";"+$("#label_amount_"+indicator).text();
+        //             }else if(td_itype == "MONTHLY"){
+        //                  label_amount = label_amount + ";"+$("#label_amount_"+indicator).text();
+        //             }else if(td_itype == "SEMI"){
+        //                  label_amount = label_amount +";"+$("#label_amount_"+indicator).text();
+        //                  label_amount = label_amount +";"+$("#label_amount2_"+indicator).text();
+        //             }else if(td_itype == "WEEKLY"){
+        //                 label_amount = label_amount +";"+$("#label_amount_"+indicator).text();
+        //                 label_amount = label_amount +";"+$("#label_amount2_"+indicator).text();
+        //                 label_amount = label_amount +";"+$("#label_amount3_"+indicator).text();
+        //                 label_amount = label_amount +";"+$("#label_amount4_"+indicator).text();
+        //                 label_amount = label_amount +";"+$("#label_amount5_"+indicator).text();
+        //             }
+        //             delimited = delimited + label_amount;
                    
+        //         });
+        // }
+        if(select_emp == "custom_emp"){
+
+            var employeeData = [];
+
+            incomeTable.rows().every(function () {
+
+                var row = $(this.node());
+
+                var btn = row.find(".tbl_emp");
+
+                if(btn.length == 0){
+                    return;
+                }
+
+                var emp_id = btn.val();
+
+                var income_type = row.find(".income_type").text().trim();
+
+                var amount_div = row.find(".amount_container");
+
+                employeeData.push({
+                    emp_id: emp_id,
+                    income_type: income_type,
+                    amount: amount_div.data("amount"),
+                    amount_2: amount_div.data("amount2"),
+                    amount_3: amount_div.data("amount3"),
+                    amount_4: amount_div.data("amount4"),
+                    amount_5: amount_div.data("amount5")
                 });
+
+            });
+
+            console.log(employeeData);
+
         }else{
             if(amount == "0" || amount == ""){
                 $.notify("Amount Cannot be Empty", {type:"info",icon:"info"}); 
@@ -254,6 +319,7 @@ $('#add_edit_employee').on('show.bs.modal', function(e) {
                                             _token : "{{csrf_token()}}", 
                                             other_income_id: other_income_id,
                                             select_emp: select_emp,
+                                            employeeData: JSON.stringify(employeeData),
                                             delimited: delimited,
                                             income_type: income_type,
                                             amount: amount,
@@ -330,14 +396,14 @@ $('#add_edit_employee').on('show.bs.modal', function(e) {
             $("#selected_div").hide("fast");
             $("#custom_tbl").hide("fast");
             $("#include").hide("fast");
-            $('#income_file').DataTable({
-                    "bDestroy": true,
-                    "autoWidth": true,
-                    "searchHighlight": true,
-                    "searching": true,
-                    "orderMulti": true,
-                    "pageLength": 10,
-                });
+            // $('#income_file').DataTable({
+            //         "bDestroy": true,
+            //         "autoWidth": true,
+            //         "searchHighlight": true,
+            //         "searching": true,
+            //         "orderMulti": true,
+            //         "pageLength": 10,
+            //     });
             
             oth_library_list();
             allowance_request_tbl();
@@ -383,11 +449,25 @@ $('#add_edit_employee').on('show.bs.modal', function(e) {
                 $("#amount_div5").hide("fast");
             }
         });
-        function delete_row(tr_id){
+        function delete_rowXXX(tr_id){
             var emp_name = $("#td_name_"+tr_id).text();
           
             $("#tr_"+tr_id).remove();
             $("#selected_employee").append("<option value='"+tr_id+"'>"+emp_name+"</option>");
+        }
+
+        function delete_row(btn, tr_id){
+
+            var emp_name = $("#td_name_"+tr_id).text();
+
+            incomeTable
+                .row($(btn).closest('tr'))
+                .remove()
+                .draw(false);
+
+            $("#selected_employee").append(
+                "<option value='"+tr_id+"'>"+emp_name+"</option>"
+            );
         }
         
         $("#include").on("click", function(){
@@ -418,8 +498,9 @@ $('#add_edit_employee').on('show.bs.modal', function(e) {
             // alert(included.length);
             for(var i  = 0; i < included.length; i++)
             {
-                var action = "<button onclick='delete_row("+included[i]+")' class='btn btn-warning tbl_emp' id='emp_id_"+included[i]+"' value='"+included[i]+"' > Delete</button>";
-                var  emp_name =   $("#selected_employee option[value="+included[i]+"]").text();
+               // var action = "<button onclick='delete_row("+included[i]+")' class='btn btn-warning tbl_emp' id='emp_id_"+included[i]+"' value='"+included[i]+"' > Delete</button>";
+               var action = "<button onclick='delete_row(this,"+included[i]+")' class='btn btn-warning tbl_emp' id='emp_id_"+included[i]+"' value='"+included[i]+"'>Delete</button>"; 
+               var  emp_name =   $("#selected_employee option[value="+included[i]+"]").text();
                 var insert = "<tr id='tr_"+included[i]+"'>";
                     insert = insert + "<td id='td_name_"+included[i]+"'>"+emp_name+"</td>";
                     var amount_data = "";
@@ -452,7 +533,20 @@ $('#add_edit_employee').on('show.bs.modal', function(e) {
                     insert = insert + "</tr>";
                     
                     // alert(insert);
-                $("#income_file tbody").append(insert);
+                // $("#income_file tbody").append(insert);
+                incomeTable.row.add([
+                    '<span class="emp_name">'+emp_name+'</span>',
+                    '<span class="income_type">'+income_type+'</span>',
+                    '<div class="amount_container" ' +
+                        'data-amount="'+amount+'" ' +
+                        'data-amount2="'+amount_2+'" ' +
+                        'data-amount3="'+amount_3+'" ' +
+                        'data-amount4="'+amount_4+'" ' +
+                        'data-amount5="'+amount_5+'">' +
+                        amount_data +
+                    '</div>',
+                    action
+                ]).draw(false);
                 $("#selected_employee").find('[value="'+included[i]+'"]').remove();
             }
            

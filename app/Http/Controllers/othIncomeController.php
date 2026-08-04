@@ -84,53 +84,81 @@ class othIncomeController extends Controller
         $user_encoder = Auth::user()->id;
         $todate = date("Y-m-d H:i:s");
         $selected_emp = $request->select_emp;
-        if($request->select_emp == "custom_emp"){
-          	if($request->delimited != null){
-            $list = explode("|", $request->delimited);
+        // if($request->select_emp == "custom_emp"){
+        //   	if($request->delimited != null){
+        //     $list = explode("|", $request->delimited);
            	
-                foreach($list as $emp_list){
+        //         foreach($list as $emp_list){
                   
-                    $data = explode(";", $emp_list);
+        //             $data = explode(";", $emp_list);
                    
-                    $ins_arr = array(
-                        "emp_id" => $data[0],
-                        "income_id" => $other_income_id,
-                        "income_type" => $data[1],
-                        "date_created" => $todate,
-                        "user_id" => $user_encoder,
-                        "selected_emp" => $selected_emp
-                    );
+        //             $ins_arr = array(
+        //                 "emp_id" => $data[0],
+        //                 "income_id" => $other_income_id,
+        //                 "income_type" => $data[1],
+        //                 "date_created" => $todate,
+        //                 "user_id" => $user_encoder,
+        //                 "selected_emp" => $selected_emp
+        //             );
                    
-                    if($data[1] == "DAILY" || $data[1] == "MONTHLY" ){
-                        $ins_arr["amount"] = $data[2];
-                        $ins_arr["amount_2"] = "0";
-                        $ins_arr["amount_3"] = "0";
-                        $ins_arr["amount_4"] = "0";
-                        $ins_arr["amount_5"] = "0";
-                    }elseif($data[1] == "SEMI"){
-                        $ins_arr["amount"] = $data[2];
-                        $ins_arr["amount_2"] = $data[3];
-                        $ins_arr["amount_3"] = "0";
-                        $ins_arr["amount_4"] = "0";
-                        $ins_arr["amount_5"] = "0";
-                    }elseif($data[1] == "WEEKLY"){
-                        $ins_arr["amount"] = $data[2];
-                        $ins_arr["amount_2"] = $data[3];
-                        $ins_arr["amount_3"] = $data[4];
-                        $ins_arr["amount_4"] = $data[5];
-                        $ins_arr["amount_5"] = $data[6];
+        //             if($data[1] == "DAILY" || $data[1] == "MONTHLY" ){
+        //                 $ins_arr["amount"] = $data[2];
+        //                 $ins_arr["amount_2"] = "0";
+        //                 $ins_arr["amount_3"] = "0";
+        //                 $ins_arr["amount_4"] = "0";
+        //                 $ins_arr["amount_5"] = "0";
+        //             }elseif($data[1] == "SEMI"){
+        //                 $ins_arr["amount"] = $data[2];
+        //                 $ins_arr["amount_2"] = $data[3];
+        //                 $ins_arr["amount_3"] = "0";
+        //                 $ins_arr["amount_4"] = "0";
+        //                 $ins_arr["amount_5"] = "0";
+        //             }elseif($data[1] == "WEEKLY"){
+        //                 $ins_arr["amount"] = $data[2];
+        //                 $ins_arr["amount_2"] = $data[3];
+        //                 $ins_arr["amount_3"] = $data[4];
+        //                 $ins_arr["amount_4"] = $data[5];
+        //                 $ins_arr["amount_5"] = $data[6];
                         
-                    }
+        //             }
 
-                    array_push($insert_array, $ins_arr); 
+        //             array_push($insert_array, $ins_arr); 
+        //         }
+              
+        //      }
+          
+          
+          
+              
+        // }
+        if($request->select_emp == "custom_emp"){
+
+            $employees = json_decode($request->employeeData, true);
+
+            if(!empty($employees)){
+
+                foreach($employees as $employee){
+
+                    $insert_array[] = [
+                        'emp_id' => $employee['emp_id'],
+                        'income_id' => $other_income_id,
+                        'income_type' => $employee['income_type'],
+                        'amount' => $employee['amount'],
+                        'amount_2' => $employee['amount_2'],
+                        'amount_3' => $employee['amount_3'],
+                        'amount_4' => $employee['amount_4'],
+                        'amount_5' => $employee['amount_5'],
+                        'selected_emp' => $selected_emp,
+                        'date_created' => $todate,
+                        'user_id' => $user_encoder
+                    ];
+
                 }
-              
-             }
-          
-          
-          
-              
-        }elseif($request->select_emp == "all_emp"){
+
+            }
+
+        }
+        elseif($request->select_emp == "all_emp"){
             $list = DB::connection("intra_payroll")->table("tbl_employee")
             ->select("id as emp_id", DB::raw("CONCAT('".$other_income_id."') as income_id"), DB::raw("CONCAT('".$amount."') as amount"), DB::raw("CONCAT('".$amount_2."') as amount_2"), DB::raw("CONCAT('".$amount_3."') as amount_3"), DB::raw("CONCAT('".$amount_4."') as amount_4"), DB::raw("CONCAT('".$amount_5."') as amount_5"), DB::raw("CONCAT('".$income_type."') as income_type") , DB::raw("CONCAT('".$todate."') as date_created"), DB::raw("CONCAT('".$user_encoder."') as user_id"), DB::raw("CONCAT('".$selected_emp."') as selected_emp") )
             
