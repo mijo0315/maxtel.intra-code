@@ -1254,16 +1254,30 @@ class employeeController extends Controller
                 })
 
                 ->addColumn('type', function($row){
-                    $return_array = array("RF" => "Rank & File", 
-                                          "EX" => "Executives",
-                                          "SM" => "Supervisory / Managerial",
-                                          "ST" => "Specialized / Technical Roles",
-                                          "AD" => "Administrative",
-                                          "FC" => "Freelance / Consulting");
 
-                    return $return_array[$row->type];
+                    $return_array = [
+                        // Existing types
+                        "RF"  => "Rank & File",
+                        "EX"  => "Executives",
+                        "ST"  => "Specialized / Technical Roles",
+                        "AD"  => "Administrative",
+                        "FC"  => "Freelance / Consulting",
 
-                  })
+                        // Updated / New types
+                        "CST" => "Top Management (C-Suite)",
+                        "SM"  => "Senior Management",
+                        "SPM" => "Supervisory & Project Management",
+                        "SIC" => "Senior-Level IC",
+                        "IIC" => "Intermediate-Level IC",
+                        "JIC" => "Junior-Level Individual Contributor (IC)",
+                        "US"  => "Unskilled",
+                        "SS"  => "Semi-Skilled",
+                        "SK"  => "Skilled",
+                        "OT"  => "Others",
+                    ];
+
+                    return $return_array[$row->type] ?? "-";
+                })
                 
                
                  ->addColumn('action', function($row) use ($page_permission){
