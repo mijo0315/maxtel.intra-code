@@ -736,14 +736,44 @@ class employeeController extends Controller
                     return $view;
                 })
                 ->addColumn('position', function($row) use ($position){
+
                     if(isset($row->is_pending) && $row->is_pending){
                         return "-";
                     }
 
                     $data = $this->search_multi_array($position, "id", $row->position_id);
-                    return $data ? $data["name"] : "-";
-                    
-                 })
+
+                    if(!$data){
+                        return "-";
+                    }
+
+                    // Position name
+                    $position_name = $data["name"] ?? "-";
+
+                    // Position type
+                    $position_type = $data["type"] ?? "";
+
+                    // Convert type code to readable label
+                    $position_types = [
+                        'CST' => 'Top Management (C-Suite)',
+                        'SM'  => 'Senior Management',
+                        'SPM' => 'Supervisory & Project Management',
+                        'SIC' => 'Senior-Level IC',
+                        'IIC' => 'Intermediate-Level IC',
+                        'JIC' => 'Junior-Level Individual Contributor (IC)',
+                        'US'  => 'Unskilled',
+                        'SS'  => 'Semi-Skilled',
+                        'SK'  => 'Skilled',
+                        'OT'  => 'Others',
+                    ];
+
+                    $position_type_label = $position_types[$position_type] ?? $position_type;
+
+                    return '<div>
+                                <strong>'.$position_name.'</strong><br>
+                                <small class="text-muted">'.$position_type_label.'</small>
+                            </div>';
+                })
                 ->addColumn('department', function($row) use ($department) {
                     if(isset($row->is_pending) && $row->is_pending){
                         return "-";
@@ -809,7 +839,7 @@ class employeeController extends Controller
                          return $btn;
                  })
 
-                 ->rawColumns(['name','action','status'])
+                 ->rawColumns(['name','position','action','status'])
                 ->make(true);
     }
 

@@ -160,12 +160,16 @@
                 </div>
                 <div class="col-md-8">
                     <select name="pos_type" id="pos_type" style="width:100%" class="form-control form-select">
-                        <option value="RF">Rank and File</option>
-                        <option value="SM">Supervisory / Managerial</option>
-                        <option value="EX">Executives</option>
-                        <option value="ST">Specialized / Technical Roles</option>
-                        <option value="AD">Administrative</option>
-                        <option value="FC">Freelance / Consulting</option>
+                        <option value="CST">Top Management (C-Suite)</option>
+                        <option value="SM">Senior Management</option>
+                        <option value="SPM">Supervisory & Project Management</option>
+                        <option value="SIC">Senior-Level IC</option>
+                        <option value="IIC">Intermediate-Level IC</option>
+                        <option value="JIC">Junior-Level Individual Contributor (IC)</option>
+                        <option value="US">Unskilled</option>
+                        <option value="SS">Semi-Skilled</option>
+                        <option value="SK">Skilled</option>
+                        <option value="OT">Others</option>
                     </select>
                 </div>
             </div>

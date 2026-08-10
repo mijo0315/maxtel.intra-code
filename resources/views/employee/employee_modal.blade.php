@@ -116,7 +116,23 @@
                                     <select class="form-control form-select" id="position">
                                         <option value="0">Select Position</option>
                                         @foreach($position as $pos)
-                                        <option value="{{$pos['id']}}">{{$pos['name']}}</option>
+                                            @php
+                                                $position_types = [
+                                                    'CST' => 'Top Management (C-Suite)',
+                                                    'SM'  => 'Senior Management',
+                                                    'SPM' => 'Supervisory & Project Management',
+                                                    'SIC' => 'Senior-Level IC',
+                                                    'IIC' => 'Intermediate-Level IC',
+                                                    'JIC' => 'Junior-Level Individual Contributor (IC)',
+                                                    'US'  => 'Unskilled',
+                                                    'SS'  => 'Semi-Skilled',
+                                                    'SK'  => 'Skilled',
+                                                    'OT'  => 'Others',
+                                                ];
+
+                                                $type_name = $position_types[$pos['type'] ?? ''] ?? '-';
+                                            @endphp
+                                        <option value="{{$pos['id']}}">{{$pos['name']}} - {{ $type_name }}</option>
                                         @endforeach
                                     </select>
                                 </div>
