@@ -354,6 +354,14 @@
                 });
             });
             function emp_view(emp_id){
+                // RESET IMAGE
+                $("#profile_pic").attr(
+                    "src",
+                    "{{ asset('upload_images/emp_pic/avatar-user.jpg') }}"
+                );
+
+                // RESET FILE INPUT
+                $("#emp_file").val("");
                 HoldOn.open(holdon_option);
                 
                     $.ajax({
