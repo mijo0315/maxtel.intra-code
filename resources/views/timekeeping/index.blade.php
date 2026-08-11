@@ -666,6 +666,7 @@ view_holiday('{{date("Y-m-01")}}');
 		
 	});
 	function set_daily_sched(emp_id,day,sched_id, is_assigned, branch_id){
+		$('#by_emp_site').select2({ dropdownParent: $('#sched_by_employee_modal') });
 		var role_id = "{{ Auth::user()->role_id }}";
 		var user_type = "{{Auth::user()->access[Route::current()->action['as']]['user_type']}}";
 		if(user_type == "employee"){
@@ -702,6 +703,7 @@ view_holiday('{{date("Y-m-01")}}');
 	}
 	// Bulk edit modal functions
 	function open_bulk_edit_modal(start_date, end_date){
+		$('#bulk_emp_site').select2({ dropdownParent: $('#sched_bulk_edit_modal') });
 		$("#bulk_edit_date_range").text(start_date + ' to ' + end_date);
 		$("#bulk_emp_lib_schedule").val(0).change();
 		$("#sched_bulk_edit_modal").modal("show");
