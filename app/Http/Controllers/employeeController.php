@@ -1610,11 +1610,25 @@ class employeeController extends Controller
     public function upload_excel_employee(Request $request)
     {
         $request->validate([
-            'employee_excel_file' => 'required|mimes:xlsx,xls'
+            'employee_excel_file' => 'required|file'
         ]);
 
-        // Read Excel file
-        $collection = Excel::toCollection($this, $request->file('employee_excel_file'));
+        $file = $request->file('employee_excel_file');
+
+        $extension = strtolower($file->getClientOriginalExtension());
+
+        if (!in_array($extension, ['xlsx', 'xls'])) {
+            return response()->json([
+                'message' => 'The employee Excel file must be a file of type: xlsx, xls.',
+                'success' => false
+            ], 422);
+        }
+
+         // Read Excel file
+        $collection = Excel::toCollection(
+            $this,
+            $file
+        );
 
         // Fetch active employees, departments, and positions from the database
         $tbl_employee = DB::connection("intra_payroll")->table("tbl_employee")
@@ -1783,22 +1797,117 @@ class employeeController extends Controller
                 $hr_group = $hrGroupMap[$excelHrGroup] ?? '';
 
                 // Check if position exists, if not insert it
-                $position = DB::connection("intra_payroll")->table('lib_position')
+                $position = DB::connection("intra_payroll")
+                    ->table('lib_position')
                     ->where('name', $position_name)
                     ->first();
 
                 if (!$position) {
-                    $position_id = DB::connection("intra_payroll")->table('lib_position')->insertGetId([
-                        'name' => $position_name,
-                        'code' => $position_name,
-                        'type' => 'RF',
-                        'schedule_id' => 0,
-                        'is_active' => 1,
-                        'date_created' => date("Y-m-d H:i:s"),
-                        'user_id' => Auth::user()->id ?? 1
-                    ]);
-                    $tbl_position[$position_name] = (object) ['id' => $position_id];
+
+                    // Determine position type based on position name
+                    $position_type = 'OT'; // Default
+
+                    $position_name_lower = strtolower(trim($position_name));
+
+                    // Top Management
+                    if (
+                        strpos($position_name_lower, 'ceo') !== false ||
+                        strpos($position_name_lower, 'chief executive') !== false ||
+                        strpos($position_name_lower, 'cfo') !== false ||
+                        strpos($position_name_lower, 'chief financial') !== false ||
+                        strpos($position_name_lower, 'coo') !== false ||
+                        strpos($position_name_lower, 'chief operating') !== false ||
+                        strpos($position_name_lower, 'cto') !== false ||
+                        strpos($position_name_lower, 'chief technology') !== false ||
+                        strpos($position_name_lower, 'president') !== false
+                    ) {
+                        $position_type = 'CST';
+
+                    // Supervisory & Project Management
+                    } elseif (
+                        strpos($position_name_lower, 'supervisor') !== false ||
+                        strpos($position_name_lower, 'superintendent') !== false ||
+                        strpos($position_name_lower, 'project manager') !== false ||
+                        strpos($position_name_lower, 'team leader') !== false ||
+                        strpos($position_name_lower, 'team lead') !== false
+                    ) {
+                        $position_type = 'SPM';
+
+                    // Senior Management
+                    } elseif (
+                        strpos($position_name_lower, 'general manager') !== false ||
+                        strpos($position_name_lower, 'branch manager') !== false ||
+                        strpos($position_name_lower, 'senior manager') !== false ||
+                        strpos($position_name_lower, 'area manager') !== false ||
+                        strpos($position_name_lower, 'regional manager') !== false ||
+                        strpos($position_name_lower, 'manager') !== false
+                    ) {
+                        $position_type = 'SM';
+
+                    // Senior-Level Individual Contributor
+                    } elseif (
+                        strpos($position_name_lower, 'senior ') !== false ||
+                        strpos($position_name_lower, 'sr. ') !== false ||
+                        strpos($position_name_lower, 'sr ') !== false
+                    ) {
+                        $position_type = 'SIC';
+
+                    // Junior-Level Individual Contributor
+                    } elseif (
+                        strpos($position_name_lower, 'junior ') !== false ||
+                        strpos($position_name_lower, 'jr. ') !== false ||
+                        strpos($position_name_lower, 'jr ') !== false
+                    ) {
+                        $position_type = 'JIC';
+
+                    // Intermediate-Level Individual Contributor
+                    } elseif (
+                        strpos($position_name_lower, 'associate') !== false ||
+                        strpos($position_name_lower, 'intermediate') !== false
+                    ) {
+                        $position_type = 'IIC';
+
+                    // Unskilled
+                    } elseif (
+                        strpos($position_name_lower, 'unskilled') !== false
+                    ) {
+                        $position_type = 'US';
+
+                    // Semi-Skilled
+                    } elseif (
+                        strpos($position_name_lower, 'semi-skilled') !== false ||
+                        strpos($position_name_lower, 'semi skilled') !== false
+                    ) {
+                        $position_type = 'SS';
+
+                    // Skilled
+                    } elseif (
+                        strpos($position_name_lower, 'skilled') !== false ||
+                        strpos($position_name_lower, 'technician') !== false ||
+                        strpos($position_name_lower, 'technician') !== false
+                    ) {
+                        $position_type = 'SK';
+                    }
+
+                    $position_id = DB::connection("intra_payroll")
+                        ->table('lib_position')
+                        ->insertGetId([
+                            'name' => $position_name,
+                            'code' => $position_name,
+                            'type' => $position_type,
+                            'schedule_id' => 0,
+                            'is_active' => 1,
+                            'date_created' => date("Y-m-d H:i:s"),
+                            'user_id' => Auth::user()->id ?? 1
+                        ]);
+
+                    $tbl_position[$position_name] = (object) [
+                        'id' => $position_id,
+                        'type' => $position_type
+                    ];
+
                 } else {
+
                     $position_id = $position->id;
                 }
 
