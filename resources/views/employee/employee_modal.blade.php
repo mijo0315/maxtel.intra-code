@@ -338,8 +338,9 @@
                                 <div class="col-md-3">
                                     <select class="form-control form-select" id="is_active">
                                         <option value="1">Active</option>
-                                        <option value="0">Resign</option>
-                                        
+                                        <option value="2">AWOL</option>
+                                        <option value="3">Inactive</option>
+                                        <option value="0">Resigned</option>
                                     </select>
                                 </div>
                             </div>

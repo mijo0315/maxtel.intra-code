@@ -805,8 +805,12 @@ class employeeController extends Controller
                         }
                         if($row->is_active == 1){
                             return "<span class='badge badge-success'>ACTIVE</span>";
+                        }elseif($row->is_active == 0){
+                            return "<span class='badge badge-danger'>RESIGNED</span>";
+                        }elseif($row->is_active == 2){
+                            return "<span class='badge badge-warning'>AWOL</span>";
                         }else{
-                            return "<span class='badge badge-danger'>RESIGN</span>";
+                            return "<span class='badge badge-secondary'>INACTIVE</span>";
                         }
                     })
                  ->addColumn('action', function($row) use ($page_permission, $role_id){
