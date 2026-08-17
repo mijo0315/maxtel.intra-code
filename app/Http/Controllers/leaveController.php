@@ -51,8 +51,8 @@ class leaveController extends Controller
                     $query->where("hr_group", "group_e")
                     ->orWhere("position_id", 76) //all team leader
                     ->orWhere("user_id", Auth::user()->id);
-                }elseif($role_id === 9){ //1st Approver - Anafe (Warehouse)
-                    $query->where("branch_id", 77)
+                }elseif($role_id === 9){ //1st Approver - Anafe (Warehouse) at Can Max
+                    $query->whereIn("branch_id", [77,134])
                     ->orWhere("user_id", Auth::user()->id);
                 }elseif($role_id === 10){ //Final App - James Brian
                     $query->whereNotIn("branch_id", [75,76])
@@ -524,9 +524,9 @@ class leaveController extends Controller
                     ->whereIn("lu.leave_status", ["FILED","APPROVED"]);
                 })
                 ->orWhere("emp.user_id", Auth::user()->id);
-            }elseif($role_id === 9){ //1st Approver - Anafe (Warehouse)
+            }elseif($role_id === 9){ //1st Approver - Anafe (Warehouse) at Can Max
                 $query->where(function($q){
-                    $q->where("emp.branch_id", 77)
+                    $q->whereIn("emp.branch_id", [77,134])
                     ->whereIn("lu.leave_status", ["FILED","APPROVED"]);
                 })
                 ->orWhere("emp.user_id", Auth::user()->id);
@@ -1063,8 +1063,8 @@ class leaveController extends Controller
                 $query->where("hr_group", "group_e")
                 ->orWhere("position_id", 76) //all team leader
                 ->orWhere("user_id", Auth::user()->id);
-            }elseif($role_id === 9){ //1st Approver - Anafe (Warehouse)
-                $query->where("branch_id", 77)
+            }elseif($role_id === 9){ //1st Approver - Anafe (Warehouse) at Can Max
+                $query->whereIn("branch_id", [77,134])
                 ->orWhere("user_id", Auth::user()->id);
             }elseif($role_id === 10){ //Final App - James Brian
                 $query->whereNotIn("branch_id", [75,76])

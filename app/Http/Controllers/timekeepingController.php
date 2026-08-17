@@ -1846,9 +1846,9 @@ class timekeepingController extends Controller
                      ->whereIn("ot.status", ["FILED","APPROVED"]);
                 })
                 ->orWhere("emp.user_id", Auth::user()->id);
-            }elseif($role_id === 9){ //1st Approver - Anafe (Warehouse)
+            }elseif($role_id === 9){ //1st Approver - Anafe (Warehouse) at Can Max
                 $query->where(function($q){
-                    $q->where("emp.branch_id", 77)
+                    $q->whereIn("emp.branch_id", [77,134])
                      ->whereIn("ot.status", ["FILED","APPROVED"]);
                 })
                 ->orWhere("emp.user_id", Auth::user()->id);
