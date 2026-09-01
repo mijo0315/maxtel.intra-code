@@ -3284,7 +3284,32 @@ class payrollController extends Controller
                                         ->where("holiday_date", $check_date)
                                         ->exists();
 
-                                } while ($is_holiday);
+                                    $is_rd = false;
+
+                                    $daily_check = DB::connection("intra_payroll")
+                                        ->table("tbl_daily_schedule")
+                                        ->where("emp_id", $emp_id)
+                                        ->where("schedule_date", $check_date)
+                                        ->first();
+
+                                    if ($daily_check) {
+                                        // Daily schedule takes priority
+                                        $is_rd = ($daily_check->schedule_id == 0);
+                                    } else {
+                                        // No daily schedule, use employee's weekly schedule
+                                        $day_name_check = strtolower(date('l', strtotime($check_date)));
+
+                                        if ($emp_data["schedule_id"] != 0) {
+                                            $weekly_sched = $this->get_schedule_data(
+                                                $emp_data["schedule_id"],
+                                                $day_name_check
+                                            );
+
+                                            $is_rd = ($weekly_sched === "RD");
+                                        }
+                                    }
+
+                                } while ($is_holiday || $is_rd);
 
 
                                 //Check if employee worked or was on approved leave on that date
