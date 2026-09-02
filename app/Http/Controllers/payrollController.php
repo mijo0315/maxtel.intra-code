@@ -2610,8 +2610,15 @@ class payrollController extends Controller
                                         if($timecard_data->AM_IN == null || $timecard_data->PM_OUT == "" || $timecard_data->PM_OUT == null || $timecard_data->AM_IN == "" ){
                                             
                                            $absent = true;
-                                            // $timekeeping_data["regular_work"] = "0";
-                                            // dd("aa");
+                                            if($emp_data["salary_type"] == 'DAILY'){
+                                                $timekeeping_data["regular_work"] = 0;
+                                                $timekeeping_data['absent'] = 0;
+                                            }else{
+                                                $timekeeping_data["regular_work"] = 8;
+                                                $timekeeping_data['absent'] = 8;
+                                            }
+                                            $timekeeping_data["lates"] = 0;
+                                            $timekeeping_data["undertime"] = 0;
                                         }else{
                                             $night_diff = 0;
                                             $actual_am_in = strtotime($timecard_data->AM_IN);
