@@ -3256,10 +3256,10 @@ class payrollController extends Controller
                                 $regular_holiday = 0;
                                 $regular_work = 0;
                                 if($emp_data["salary_type"] == "MONTHLY"){
+                                    $regular_work = $daily_divisor;
                                     if($timecard_data != null){
                                         if($timecard_data->AM_IN != "" && $timecard_data->PM_OUT != ""){
                                             $regular_holiday = $daily_divisor;
-                                            $regular_work = $daily_divisor;
                                             if($timekeeping_data["rd"] > 0){
                                                 // $timekeeping_data["rd_rh"] = $timekeeping_data["rd"];
                                                 $timekeeping_data["rd_rh"] = 0;
@@ -3357,10 +3357,10 @@ class payrollController extends Controller
                                 $regular_work = 0;
                                 $special_holiday = 0;
                                 if($emp_data["salary_type"] == "MONTHLY"){
+                                    $regular_work = $daily_divisor;
                                     if($timecard_data != null){
                                         if($timecard_data->AM_IN != "" && $timecard_data->PM_OUT != ""){
                                             $special_holiday = $daily_divisor;
-                                            $regular_work = $daily_divisor;
                                             if($timekeeping_data["rd"] > 0){
                                                 // $timekeeping_data["rd_sh"] = $timekeeping_data["rd"];
                                                 $timekeeping_data["rd_sh"] = 0;
