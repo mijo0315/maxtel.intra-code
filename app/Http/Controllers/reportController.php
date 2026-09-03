@@ -954,34 +954,35 @@ class reportController extends Controller
                         $emp_yearly_rate = $emp_data[0]["salary_rate"]*12;
                         $daily_rate = $emp_yearly_rate / $yearly_divisor;
                     }
-                    $bp = $this->search_to_array($inc_data,"type", "BP");
+                    $bp = $this->search_to_array($inc_data, "type", "BP");
                     if (count($bp) > 0) {
-
                         $basic_pay_amount = $bp[0]["amount"];
                         if ($daily_rate > 0) {
-                            if($emp_salary_type == "DAILY"){
+                            if ($emp_salary_type == "DAILY") {
                                 $bp_days = round($basic_pay_amount / $daily_rate, 2);
-                            }else{
+                            } else {
                                 $timekeeping = DB::connection("intra_payroll")
                                     ->table("tbl_timekeeping")
                                     ->where("payroll_id", $payroll_id)
                                     ->where("emp_id", $emp_id)
                                     ->get();
-
                                 $total_work_hours = 0;
-
                                 foreach ($timekeeping as $tk) {
-                                    if ($tk->absent == 0) {
-                                        $total_work_hours += floatval($tk->regular_work);
-                                        $total_work_hours += floatval($tk->regular_leave) + floatval($tk->sick_leave);
+                                    $absent = floatval($tk->absent);
+                                    $regular_work = floatval($tk->regular_work);
+                                    // Full day
+                                    if ($absent == 0) {
+                                        $total_work_hours += $regular_work;
+                                        $total_work_hours += floatval($tk->regular_leave);
+                                        $total_work_hours += floatval($tk->sick_leave);
+                                    // Half day: absent = 4 and regular_work = 4
+                                    } elseif ($absent == 4 && $regular_work == 4) {
+                                        $total_work_hours += 4;
                                     }
                                 }
-
                                 $bp_days = $total_work_hours / 8;
                             }
-                            
                         }
-
                     }
                     $excel["Basic Pay"] = $basic_pay_amount;
                     $excel["Total Days"] = $bp_days;

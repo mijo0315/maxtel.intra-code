@@ -2869,6 +2869,10 @@ class payrollController extends Controller
                                                         $timekeeping_data["regular_work"] = 0;
                                                     }
                                                 }
+
+                                                if($emp_data["salary_type"] == 'MONTHLY' && $work_hours == 4 && $timekeeping_data['absent'] == 0){
+                                                    $timekeeping_data['absent'] = 4; //dapat may halfday din na absent
+                                                }
     
                                             
                                             // $check_applied_ot = $this->search_multi_array($applied_ot, "date_target", $cur_date);
