@@ -1044,7 +1044,9 @@ class reportController extends Controller
                     ? $payroll->rice_allowance_amount
                     : 1500;
                 $excel_data = collect($excel_data);
-                $total_net_pay = $excel_data->sum('net_pay');
+                $total_net_pay = $excel_data->sum(function ($row) {
+                    return max(0, floatval($row['net_pay']));
+                });
                 if($payroll->rice_allowance == 1){
                     $rice_row = [];
                     foreach ($header as $head) {
