@@ -3332,7 +3332,7 @@ class payrollController extends Controller
 
                                 //Final condition
                                 if (!empty($timecard_data)) {
-                                    if($timecard_data->AM_IN != "" && $timecard_data->PM_OUT != "" && $emp_data["hr_group"] != "group_c" && $emp_data["salary_type"] == "MONTHLY"){
+                                    if($timecard_data->AM_IN != "" && $timecard_data->PM_OUT != "" && $emp_data["hr_group"] != "group_c"){
                                         $regular_work = $daily_divisor;
                                     }
                                 }
@@ -3431,7 +3431,7 @@ class payrollController extends Controller
 
                                 //Final condition
                                 if (!empty($timecard_data)) {
-                                    if($timecard_data->AM_IN != "" && $timecard_data->PM_OUT != "" && $emp_data["hr_group"] != "group_c" && $emp_data["salary_type"] == "MONTHLY"){
+                                    if($timecard_data->AM_IN != "" && $timecard_data->PM_OUT != "" && $emp_data["hr_group"] != "group_c"){
                                         $regular_work = $daily_divisor;
                                     }
                                 }
