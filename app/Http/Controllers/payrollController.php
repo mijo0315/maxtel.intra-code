@@ -1299,7 +1299,8 @@ class payrollController extends Controller
                 $absent_days = $time_keep["absent"] / $daily_divisor;
                 $real_present_days = $time_keep["present_days"] - $absent_days;
                 if($emp_rate_type == "DAILY"){
-                    $real_present_days = $time_keep["regular_work"] + $time_keep["regular_holiday"] + $time_keep["special_holiday"];
+                    // $real_present_days = $time_keep["regular_work"] + $time_keep["regular_holiday"] + $time_keep["special_holiday"];
+                    $real_present_days = $time_keep["regular_work"]; 
                     $real_present_days = $real_present_days / 8;
                 }
             }else{
