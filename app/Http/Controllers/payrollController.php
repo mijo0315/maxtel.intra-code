@@ -3348,6 +3348,10 @@ class payrollController extends Controller
                                 if($emp_data["salary_type"] == "DAILY"){
                                     $timekeeping_data['regular_work'] = $regular_work;
                                     $timekeeping_data["regular_holiday"] = $regular_holiday;
+                                    if($regular_work > 0 && $regular_holiday == 0){
+                                        $timekeeping_data['regular_work'] = 0;
+                                        $timekeeping_data["regular_holiday"] = $regular_work;
+                                    }
                                 }else{
                                     $timekeeping_data['regular_work'] = $regular_work; 
                                     $timekeeping_data["regular_holiday"] = 0; 
