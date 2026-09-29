@@ -10,6 +10,133 @@
     .btn-check{
        display:none;
     }
+
+    
+    /* Salary increase modal */
+    .salary-modal-dialog {
+        max-width: 1200px;
+        width: calc(100% - 30px);
+    }
+
+    #salaryIncreaseModal .modal-content {
+        border-radius: 8px;
+        overflow: visible;
+    }
+
+    #salaryIncreaseModal .modal-body {
+        padding: 20px;
+    }
+
+    #salaryIncreaseModal .modal-header {
+        border-radius: 7px 7px 0 0;
+    }
+
+    #salaryIncreaseModal .form-group label {
+        margin-bottom: 7px;
+    }
+
+    #salaryIncreaseModal .form-control {
+        min-height: 38px;
+    }
+
+    /* Select2 employee dropdown */
+    #salaryIncreaseModal .select2-container {
+        width: 100% !important;
+    }
+
+    #salaryIncreaseModal .select2-container--default
+    .select2-selection--multiple {
+        min-height: 42px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        padding: 4px 6px;
+        background-color: #fff;
+    }
+
+    #salaryIncreaseModal .select2-container--default
+    .select2-selection--multiple .select2-selection__rendered {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        padding: 0;
+    }
+
+    #salaryIncreaseModal .select2-container--default
+    .select2-selection--multiple .select2-selection__choice {
+        margin: 2px;
+        padding: 3px 8px;
+        border: 1px solid #b8d4f8;
+        border-radius: 4px;
+        background-color: #eaf3ff;
+        color: #174a83;
+    }
+
+    #salaryIncreaseModal .select2-container--default
+    .select2-selection--multiple .select2-selection__choice__remove {
+        color: #174a83;
+        margin-right: 5px;
+    }
+
+    #salaryIncreaseModal .select2-container--default
+    .select2-search--inline .select2-search__field {
+        margin-top: 5px;
+        min-width: 180px;
+    }
+
+    #salaryIncreaseModal .select2-dropdown {
+        z-index: 1060;
+        border-color: #ced4da;
+    }
+
+    #salaryIncreaseModal .select2-results__option {
+        padding: 8px 12px;
+    }
+
+    #salaryIncreaseModal .select2-container--default
+    .select2-results__option--highlighted[aria-selected] {
+        background-color: #007bff;
+    }
+
+    /* DataTable */
+    #salary_increase_tbl {
+        width: 100% !important;
+    }
+
+    #salary_increase_tbl th,
+    #salary_increase_tbl td {
+        vertical-align: middle;
+        white-space: nowrap;
+    }
+
+    #salary_increase_tbl .salary-inline-amount {
+        min-width: 130px;
+        max-width: 180px;
+        text-align: right;
+    }
+
+    .salary-table-container {
+        width: 100%;
+        overflow: hidden;
+    }
+
+    @media (max-width: 767px) {
+        .salary-modal-dialog {
+            width: auto;
+            margin: 10px;
+        }
+
+        #salaryIncreaseModal .modal-body {
+            padding: 12px;
+        }
+
+        #salaryIncreaseModal .select2-search--inline .select2-search__field {
+            min-width: 100px;
+        }
+
+        #salaryIncreaseModal .table-responsive {
+            overflow-x: auto;
+        }
+    }
    
 </style>
 @stop
@@ -1442,106 +1569,350 @@
                 }
             });
         }
-        function salary_increase(pay_id)
-        {
-            $("#salary_pay_id").val(pay_id);
+        
+        
+        let salaryIncreaseTable = null;
 
+        function init_salary_employee_select() {
+            let select = $("#salary_employee_ids");
+
+            if (select.hasClass("select2-hidden-accessible")) {
+                select.select2("destroy");
+            }
+
+            select.select2({
+                width: "100%",
+                placeholder: "Search or select employees",
+                allowClear: true,
+                closeOnSelect: false,
+                dropdownParent: $("#salaryIncreaseModal"),
+                language: {
+                    noResults: function () {
+                        return "No eligible employees found";
+                    },
+                    searching: function () {
+                        return "Searching employees...";
+                    }
+                }
+            });
+        }
+
+        function salary_increase(pay_id) {
+            $("#salary_pay_id").val(pay_id);
             $("#salary_amount").val("");
             $("#salary_from").val("");
             $("#salary_to").val("");
 
+            $("#salary_employee_ids").empty();
+
+            init_salary_employee_select();
+
             $("#salaryIncreaseModal").modal("show");
+
+            load_salary_employees(pay_id);
+            load_salary_increase_table(pay_id);
         }
-        function save_salary_increase()
-        {
 
-            let amount = $("#salary_amount").val();
-            let from = $("#salary_from").val();
-            let to = $("#salary_to").val();
-
-
-            if(amount == "" || amount <= 0){
-
-                $.notify("Please input Daily Increase Amount", {
-                    type:"danger"
-                });
-
-                $("#salary_amount").focus();
-                return false;
-
-            }
-
-
-            if(from == ""){
-
-                $.notify("Please select From date", {
-                    type:"danger"
-                });
-
-                $("#salary_from").focus();
-                return false;
-
-            }
-
-
-            if(to == ""){
-
-                $.notify("Please select To date", {
-                    type:"danger"
-                });
-
-                $("#salary_to").focus();
-                return false;
-
-            }
-
-
-            if(new Date(from) > new Date(to)){
-
-                $.notify("From date cannot be greater than To date", {
-                    type:"danger"
-                });
-
-                return false;
-
-            }
-
-
-
+        function load_salary_employees(pay_id) {
             $.ajax({
-
-                url:"{{route('save_salary_increase')}}",
-
-                type:"POST",
-
-                data:{
-                    _token:"{{csrf_token()}}",
-
-                    pay_id:$("#salary_pay_id").val(),
-
-                    amount:amount,
-
-                    from:from,
-
-                    to:to
+                url: "{{ route('salary_increase_employees') }}",
+                type: "GET",
+                data: {
+                    pay_id: pay_id
                 },
+                success: function (data) {
+                    let select = $("#salary_employee_ids");
 
-                success:function(data){
+                    select.empty();
 
-                    $.notify(data,{
-                        type:"info"
+                    $.each(data, function (index, emp) {
+                        let option = new Option(
+                            emp.emp_code + " - " + emp.name,
+                            emp.id,
+                            false,
+                            false
+                        );
+
+                        select.append(option);
                     });
 
-
-                    $("#salaryIncreaseModal").modal("hide");
-                    payroll_list();
-
+                    select.trigger("change");
+                },
+                error: function (xhr) {
+                    $.notify(
+                        xhr.responseJSON?.message ||
+                        "Unable to load employees.",
+                        { type: "danger" }
+                    );
                 }
-
             });
-
-
         }
+
+        // Select all eligible employees
+        $("#salary_select_all").on("click", function () {
+            let select = $("#salary_employee_ids");
+
+            select.find("option").prop("selected", true);
+            select.trigger("change");
+        });
+
+        // Clear selected employees
+        $("#salary_clear_all").on("click", function () {
+            $("#salary_employee_ids")
+                .val(null)
+                .trigger("change");
+        });
+
+        
+        function load_salary_increase_table(pay_id) {
+            if ($.fn.DataTable.isDataTable("#salary_increase_tbl")) {
+                $("#salary_increase_tbl").DataTable().destroy();
+            }
+
+            salaryIncreaseTable = $("#salary_increase_tbl").DataTable({
+                processing: true,
+                serverSide: false,
+                responsive: false,
+                autoWidth: false,
+                scrollX: true,
+                searching: true,
+                paging: true,
+                pageLength: 10,
+                lengthChange: true,
+                ordering: true,
+                language: {
+                    emptyTable: "No salary increase records found.",
+                    zeroRecords: "No matching employees found.",
+                    processing: "Loading employee records..."
+                },
+                ajax: {
+                    url: "{{ route('salary_increase_list') }}",
+                    type: "GET",
+                    data: {
+                        pay_id: pay_id
+                    },
+                    dataSrc: "data"
+                },
+                columns: [
+                    {
+                        data: "emp_code",
+                        defaultContent: ""
+                    },
+                    {
+                        data: "employee_name",
+                        defaultContent: ""
+                    },
+                    {
+                        data: "salary_type",
+                        defaultContent: ""
+                    },
+                    {
+                        data: "amount",
+                        className: "text-right",
+                        render: function (data, type, row) {
+                            let amount = parseFloat(data || 0);
+
+                            if (type !== "display") {
+                                return amount;
+                            }
+
+                            return `
+                                <input type="number"
+                                    class="form-control salary-inline-amount"
+                                    data-id="${row.id}"
+                                    value="${amount.toFixed(2)}"
+                                    min="0"
+                                    step="0.01">
+                            `;
+                        }
+                    },
+                    {
+                        data: "id",
+                        className: "text-center",
+                        orderable: false,
+                        searchable: false,
+                        render: function (id) {
+                            return `
+                                <button type="button"
+                                        class="btn btn-sm btn-danger salary-delete"
+                                        data-id="${id}"
+                                        title="Delete salary increase">
+                                    <i class="fa fa-trash"></i>
+                                </button>
+                            `;
+                        }
+                    }
+                ],
+                columnDefs: [
+                    { targets: 0, width: "120px" },
+                    { targets: 1, width: "220px" },
+                    { targets: 2, width: "120px" },
+                    { targets: 3, width: "200px" },
+                    { targets: 4, width: "90px" }
+                ],
+                order: [[1, "asc"]],
+                initComplete: function () {
+                    this.api().columns.adjust();
+                }
+            });
+        }
+
+        // Recalculate table dimensions when the modal becomes visible.
+        $("#salaryIncreaseModal").on("shown.bs.modal", function () {
+            if (salaryIncreaseTable) {
+                salaryIncreaseTable.columns.adjust().draw(false);
+            }
+        });
+
+        function save_salary_increase() {
+            let pay_id = $("#salary_pay_id").val();
+            let amount = parseFloat($("#salary_amount").val());
+            let from = $("#salary_from").val();
+            let to = $("#salary_to").val();
+            let employee_ids = $("#salary_employee_ids").val() || [];
+
+            if (!amount || amount <= 0 || !Number.isFinite(amount)) {
+                $.notify("Please input a valid Daily Increase Amount.", {
+                    type: "danger"
+                });
+                $("#salary_amount").focus();
+                return;
+            }
+
+            if (!from) {
+                $.notify("Please select From date.", { type: "danger" });
+                $("#salary_from").focus();
+                return;
+            }
+
+            if (!to) {
+                $.notify("Please select To date.", { type: "danger" });
+                $("#salary_to").focus();
+                return;
+            }
+
+            if (from > to) {
+                $.notify("From date cannot be greater than To date.", {
+                    type: "danger"
+                });
+                return;
+            }
+
+            if (employee_ids.length === 0) {
+                $.notify("Please select at least one employee.", {
+                    type: "danger"
+                });
+                $("#salary_employee_ids").focus();
+                return;
+            }
+
+            $.ajax({
+                url: "{{ route('save_salary_increase') }}",
+                type: "POST",
+                data: {
+                    _token: "{{ csrf_token() }}",
+                    pay_id: pay_id,
+                    employee_ids: employee_ids,
+                    amount: amount,
+                    from: from,
+                    to: to
+                },
+                success: function (data) {
+                    $.notify(data.message || data, {
+                        type: data.success === false ? "danger" : "success"
+                    });
+
+                    if (data.success !== false) {
+                        load_salary_increase_table(pay_id);
+                        payroll_list();
+                    }
+                },
+                error: function (xhr) {
+                    $.notify(
+                        xhr.responseJSON?.message || "Unable to save salary increase.",
+                        { type: "danger" }
+                    );
+                }
+            });
+        }
+
+        // Save inline-edited amount when the input loses focus.
+        $(document).on("change", ".salary-inline-amount", function () {
+            let input = $(this);
+            let id = input.data("id");
+            let amount = parseFloat(input.val());
+
+            if (!Number.isFinite(amount) || amount < 0) {
+                $.notify("Please enter a valid amount.", {
+                    type: "danger"
+                });
+                return;
+            }
+
+            $.ajax({
+                url: "{{ route('update_salary_increase') }}",
+                type: "POST",
+                data: {
+                    _token: "{{ csrf_token() }}",
+                    id: id,
+                    amount: amount
+                },
+                success: function (data) {
+                    $.notify(data.message, {
+                        type: data.success ? "success" : "danger"
+                    });
+
+                    if (data.success) {
+                        load_salary_increase_table(
+                            $("#salary_pay_id").val()
+                        );
+                        payroll_list();
+                    }
+                },
+                error: function (xhr) {
+                    $.notify(
+                        xhr.responseJSON?.message || "Unable to update amount.",
+                        { type: "danger" }
+                    );
+                }
+            });
+        });
+
+        // Delete salary increase entry.
+        $(document).on("click", ".salary-delete", function () {
+            let id = $(this).data("id");
+
+            if (!confirm("Are you sure you want to delete this salary increase?")) {
+                return;
+            }
+
+            $.ajax({
+                url: "{{ route('delete_salary_increase') }}",
+                type: "POST",
+                data: {
+                    _token: "{{ csrf_token() }}",
+                    id: id
+                },
+                success: function (data) {
+                    $.notify(data.message, {
+                        type: data.success ? "success" : "danger"
+                    });
+
+                    if (data.success) {
+                        load_salary_increase_table(
+                            $("#salary_pay_id").val()
+                        );
+                        payroll_list();
+                    }
+                },
+                error: function (xhr) {
+                    $.notify(
+                        xhr.responseJSON?.message || "Unable to delete entry.",
+                        { type: "danger" }
+                    );
+                }
+            });
+        });
         $("#include").on("click", function(){
             var filter = $("#filter").val();
             var pay_id = $("#pay_id").val();

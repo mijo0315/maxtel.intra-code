@@ -167,7 +167,13 @@ Route::get('payroll_management', [payrollController::class, 'payroll_management'
     Route::post('payroll_process_timecard', [payrollController::class, 'payroll_process_timecard'])->middleware(['auth'])->name('payroll_process_timecard');
     Route::post('payroll_process', [payrollController::class, 'payroll_process'])->middleware(['auth'])->name('payroll_process');
     Route::post('payroll_process_for_approval', [payrollController::class, 'payroll_process_for_approval'])->middleware(['auth'])->name('payroll_process_for_approval');
+    
     Route::post('save_salary_increase',[payrollController::class, 'save_salary_increase'])->middleware(['auth'])->name('save_salary_increase');
+    Route::get('salary_increase_employees', [payrollController::class,'salary_increase_employees'])->middleware(['auth'])->name('salary_increase_employees');
+    Route::get('salary_increase_list', [payrollController::class,'salary_increase_list'])->middleware(['auth'])->name('salary_increase_list');
+    Route::post('update_salary_increase', [payrollController::class,'update_salary_increase'])->middleware(['auth'])->name('update_salary_increase');
+    Route::post('delete_salary_increase', [payrollController::class,'delete_salary_increase'])->middleware(['auth'])->name('delete_salary_increase');
+
     Route::post('approve_payroll', [payrollController::class, 'approve_payroll'])->middleware(['auth'])->name('approve_payroll');
     Route::post('re_open_payroll', [payrollController::class, 're_open_payroll'])->middleware(['auth'])->name('re_open_payroll');
     Route::post('manual_add_tk_to_payroll', [payrollController::class, 'manual_add_tk_to_payroll'])->middleware(['auth'])->name('manual_add_tk_to_payroll');

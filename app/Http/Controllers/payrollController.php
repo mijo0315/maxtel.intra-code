@@ -4782,70 +4782,83 @@ class payrollController extends Controller
         return response()->json($employee_list);
     }
 
+    
     public function save_salary_increase(Request $request)
     {
-        $payroll = DB::connection("intra_payroll")
-            ->table("tbl_payroll")
-            ->where("id", $request->pay_id)
+        $request->validate([
+            'pay_id'       => 'required|integer',
+            'employee_ids' => 'required|array|min:1',
+            'employee_ids.*' => 'required|integer|distinct',
+            'amount'       => 'required|numeric|gt:0',
+            'from'         => 'required|date',
+            'to'           => 'required|date|after_or_equal:from',
+        ]);
+
+        $db = DB::connection('intra_payroll');
+
+        $payroll = $db->table('tbl_payroll')
+            ->where('id', $request->pay_id)
             ->first();
 
         if (!$payroll) {
-            return "Payroll not found";
+            return response()->json([
+                'success' => false,
+                'message' => 'Payroll not found.'
+            ], 404);
         }
 
-        $employee_ids = explode(
-            ";",
-            str_replace("|", "", $payroll->employee)
+        $payroll_employee_ids = array_filter(
+            array_map('trim', explode(
+                ';',
+                str_replace('|', '', $payroll->employee ?? '')
+            ))
         );
 
-        DB::beginTransaction();
+        $employee_ids = array_unique(
+            array_map('intval', $request->employee_ids)
+        );
+
+        // Ensure selected employees belong to this payroll.
+        if (count(array_diff(
+            $employee_ids,
+            array_map('intval', $payroll_employee_ids)
+        )) > 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'One or more employees do not belong to this payroll.'
+            ], 422);
+        }
+
+        $employees = $db->table('tbl_employee')
+            ->whereIn('id', $employee_ids)
+            ->where('is_mwe', 1)
+            ->whereIn('salary_type', ['DAILY', 'MONTHLY'])
+            ->get();
+
+        if ($employees->count() !== count($employee_ids)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'One or more selected employees are not eligible.'
+            ], 422);
+        }
+
+        $db->beginTransaction();
 
         try {
+            $saved_count = 0;
 
-            foreach ($employee_ids as $emp_id) {
-
-                if (empty($emp_id)) {
-                    continue;
-                }
-
-                $emp = DB::connection("intra_payroll")
-                    ->table("tbl_employee")
-                    ->where("id", $emp_id)
-                    ->first();
-
-                if (!$emp) {
-                    continue;
-                }
-
-                // MWE only
-                if ($emp->is_mwe != 1) {
-                    continue;
-                }
-
-                // DAILY or MONTHLY only
-                if (!in_array($emp->salary_type, ["DAILY", "MONTHLY"])) {
-                    continue;
-                }
-
-                /*
-                |--------------------------------------------------------------------------
-                | Count eligible worked days
-                |--------------------------------------------------------------------------
-                */
-
-                $attendanceQuery = DB::connection("intra_payroll")
-                    ->table("tbl_timekeeping")
-                    ->where("emp_id", $emp_id)
-                    ->whereBetween("date_target", [
+            foreach ($employees as $emp) {
+                $attendanceQuery = $db->table('tbl_timekeeping')
+                    ->where('emp_id', $emp->id)
+                    ->whereBetween('date_target', [
                         $request->from,
                         $request->to
                     ])
-                    ->where("regular_work", ">", 0);
+                    ->where('regular_work', '>', 0);
 
-                // MONTHLY employees:
-                // Exclude days with absent hours
-                if ($emp->salary_type == "MONTHLY") {
-                    $attendanceQuery->where("absent", 0);
+                // Monthly employees: exclude days with absences.
+                if ($emp->salary_type === 'MONTHLY') {
+                    $attendanceQuery->where('absent', 0);
                 }
 
                 $attendance = $attendanceQuery->count();
@@ -4854,33 +4867,197 @@ class payrollController extends Controller
                     continue;
                 }
 
-                $total = $request->amount * $attendance;
+                $total = round(
+                    (float) $request->amount * $attendance,
+                    2
+                );
 
-                DB::connection("intra_payroll")
-                    ->table("tbl_payroll_income")
-                    ->updateOrInsert(
-                        [
-                            "payroll_id" => $request->pay_id,
-                            "emp_id"     => $emp_id,
-                            "type"       => "Salary Increase"
-                        ],
-                        [
-                            "amount"       => $total,
-                            "date_created" => date("Y-m-d"),
-                            "user_id"      => Auth::user()->id
-                        ]
-                    );
+                $db->table('tbl_payroll_income')->updateOrInsert(
+                    [
+                        'payroll_id' => $request->pay_id,
+                        'emp_id'     => $emp->id,
+                        'type'       => 'Salary Increase'
+                    ],
+                    [
+                        'amount'       => $total,
+                        'date_created' => date('Y-m-d'),
+                        'user_id'      => Auth::id()
+                    ]
+                );
+
+                $saved_count++;
             }
 
-            DB::commit();
+            $db->commit();
 
-            return "Salary Increase successfully updated.";
+            return response()->json([
+                'success' => true,
+                'message' => "Salary increase successfully updated for {$saved_count} employee(s)."
+            ]);
 
         } catch (\Throwable $th) {
+            $db->rollBack();
 
-            DB::rollback();
+            \Log::error('Salary increase error: ' . $th->getMessage());
 
-            return $th->getMessage();
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to save salary increase.'
+            ], 500);
         }
+    }
+
+    
+    public function update_salary_increase(Request $request)
+    {
+        $request->validate([
+            'id'     => 'required|integer',
+            'amount' => 'required|numeric|min:0'
+        ]);
+
+        $db = DB::connection('intra_payroll');
+
+        $income = $db->table('tbl_payroll_income')
+            ->where('id', $request->id)
+            ->where('type', 'Salary Increase')
+            ->first();
+
+        if (!$income) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Salary increase record not found.'
+            ], 404);
+        }
+
+        $db->table('tbl_payroll_income')
+            ->where('id', $income->id)
+            ->where('type', 'Salary Increase')
+            ->update([
+                'amount' => round((float) $request->amount, 2),
+                'user_id' => Auth::id()
+            ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Salary increase amount updated successfully.'
+        ]);
+    }
+
+    
+    public function delete_salary_increase(Request $request)
+    {
+        $request->validate([
+            'id' => 'required|integer'
+        ]);
+
+        $db = DB::connection('intra_payroll');
+
+        $deleted = $db->table('tbl_payroll_income')
+            ->where('id', $request->id)
+            ->where('type', 'Salary Increase')
+            ->delete();
+
+        if (!$deleted) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Salary increase record not found.'
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Salary increase deleted successfully.'
+        ]);
+    }
+
+    
+    public function salary_increase_employees(Request $request)
+    {
+        $request->validate([
+            'pay_id' => 'required|integer'
+        ]);
+
+        $db = DB::connection('intra_payroll');
+
+        $payroll = $db->table('tbl_payroll')
+            ->where('id', $request->pay_id)
+            ->first();
+
+        if (!$payroll) {
+            return response()->json([
+                'message' => 'Payroll not found.'
+            ], 404);
+        }
+
+        $employee_ids = array_filter(
+            array_map('trim', explode(
+                ';',
+                str_replace('|', '', $payroll->employee ?? '')
+            ))
+        );
+
+        $employees = $db->table('tbl_employee')
+            ->whereIn('id', $employee_ids)
+            ->where('is_mwe', 1)
+            ->whereIn('salary_type', ['DAILY', 'MONTHLY'])
+            ->orderBy('last_name')
+            ->orderBy('first_name')
+            ->get([
+                'id',
+                'emp_code',
+                'first_name',
+                'middle_name',
+                'last_name',
+                'ext_name',
+                'salary_type'
+            ])
+            ->map(function ($emp) {
+                $emp->name = trim(
+                    $emp->first_name . ' ' .
+                    ($emp->middle_name ? $emp->middle_name . ' ' : '') .
+                    $emp->last_name . ' ' .
+                    ($emp->ext_name ?? '')
+                );
+
+                return $emp;
+            });
+
+        return response()->json($employees);
+    }
+
+    
+    public function salary_increase_list(Request $request)
+    {
+        $request->validate([
+            'pay_id' => 'required|integer'
+        ]);
+
+        $db = DB::connection('intra_payroll');
+
+        $data = $db->table('tbl_payroll_income as pi')
+            ->join('tbl_employee as e', 'e.id', '=', 'pi.emp_id')
+            ->where('pi.payroll_id', $request->pay_id)
+            ->where('pi.type', 'Salary Increase')
+            ->select(
+                'pi.id',
+                'pi.emp_id',
+                'pi.amount',
+                'e.emp_code',
+                'e.salary_type',
+                DB::raw("
+                    CONCAT(
+                        e.first_name, ' ',
+                        IFNULL(CONCAT(e.middle_name, ' '), ''),
+                        e.last_name,
+                        IFNULL(CONCAT(' ', e.ext_name), '')
+                    ) as employee_name
+                ")
+            )
+            ->orderBy('e.last_name')
+            ->get();
+
+        return response()->json([
+            'data' => $data
+        ]);
     }
 }
