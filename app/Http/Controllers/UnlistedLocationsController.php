@@ -8,39 +8,67 @@ use DB;
 
 class UnlistedLocationsController extends Controller
 {
+    
     public function index(Request $request)
     {
-        // Get all employees with their department names
-        $allEmployees = DB::connection('intra_payroll')
-            ->table('tbl_employee as e')
-            ->leftJoin('tbl_department as d', 'e.department', '=', 'd.id')
-            ->select('e.bio_id', 'e.first_name', 'e.last_name', 'e.department', 'd.department as department_name')
+        $db = DB::connection('intra_payroll');
+
+        // Get active branches for the Sites filter.
+        $branches = $db->table('tbl_branch')
+            ->where('is_active', 1)
+            ->orderBy('branch')
+            ->get(['id', 'branch']);
+
+        // Get employees and their assigned branch.
+        $allEmployees = $db->table('tbl_employee as e')
+            ->leftJoin('tbl_branch as b', 'e.branch_id', '=', 'b.id')
+            ->select(
+                'e.bio_id',
+                'e.first_name',
+                'e.last_name',
+                'e.branch_id',
+                'b.branch as branch_name'
+            )
             ->get();
 
-        // Extract unique department names
-        $departments = $allEmployees
-            ->pluck('department_name')
-            ->filter(function($dept) { return !empty($dept); })
-            ->unique()
-            ->sort()
-            ->values();
-
-        // Get all employees for filtering with names
+        // Prepare employee options for the filter.
         $employees = $allEmployees
-            ->map(function($emp) {
+            ->map(function ($emp) {
                 return (object) [
                     'bio_id' => $emp->bio_id,
                     'first_name' => $emp->first_name,
                     'last_name' => $emp->last_name,
-                    'department' => $emp->department_name ?? $emp->department
+                    'branch_id' => $emp->branch_id,
+                    'branch_name' => $emp->branch_name ?? 'N/A',
                 ];
             })
             ->sortBy('first_name')
             ->values();
 
-        return view('unlisted_locations.index', compact('departments', 'employees'));
+        return view(
+            'unlisted_locations.index',
+            compact('branches', 'employees')
+        );
     }
-    
+
+    public function indexXX(Request $request)
+    {
+        $db = DB::connection('intra_payroll');
+
+        $branches = $db->table('tbl_branch')
+            ->where('is_active', 1)
+            ->orderBy('branch')
+            ->get(['id', 'branch']);
+
+        $employees = $db->table('tbl_employee as e')
+            ->leftJoin('tbl_branch as b', 'e.branch_id', '=', 'b.id')
+            ->select('e.bio_id', 'e.first_name', 'e.last_name', 'e.branch_id', 'b.branch as branch_name')
+            ->orderBy('e.first_name')
+            ->get();
+
+        return view('unlisted_locations.index', compact('branches', 'employees'));
+    }
+
     public function debugApiCall(Request $request)
     {
         try {
@@ -504,35 +532,20 @@ class UnlistedLocationsController extends Controller
 
     public function report()
     {
-        // Get all employees with their department names
-        $allEmployees = DB::connection('intra_payroll')
-            ->table('tbl_employee as e')
-            ->leftJoin('tbl_department as d', 'e.department', '=', 'd.id')
-            ->select('e.bio_id', 'e.first_name', 'e.last_name', 'e.department', 'd.department as department_name')
+        $db = DB::connection('intra_payroll');
+
+        $branches = $db->table('tbl_branch')
+            ->where('is_active', 1)
+            ->orderBy('branch')
+            ->get(['id', 'branch']);
+
+        $employees = $db->table('tbl_employee as e')
+            ->leftJoin('tbl_branch as b', 'e.branch_id', '=', 'b.id')
+            ->select('e.bio_id', 'e.first_name', 'e.last_name', 'e.branch_id', 'b.branch as branch_name')
+            ->orderBy('e.first_name')
             ->get();
 
-        // Extract unique department names
-        $departments = $allEmployees
-            ->pluck('department_name')
-            ->filter(function($dept) { return !empty($dept); })
-            ->unique()
-            ->sort()
-            ->values();
-
-        // Get all employees for filtering with names
-        $employees = $allEmployees
-            ->map(function($emp) {
-                return (object) [
-                    'bio_id' => $emp->bio_id,
-                    'first_name' => $emp->first_name,
-                    'last_name' => $emp->last_name,
-                    'department' => $emp->department_name ?? $emp->department
-                ];
-            })
-            ->sortBy('first_name')
-            ->values();
-
-        return view('unlisted_locations.report', compact('departments', 'employees'));
+        return view('unlisted_locations.report', compact('branches', 'employees'));
     }
 
     public function getLowAttendanceData(Request $request)
@@ -541,7 +554,7 @@ class UnlistedLocationsController extends Controller
             $draw = $request->get('draw', 1);
             $start = $request->get('start', 0);
             $length = $request->get('length', 10);
-            $department = $request->get('department', '');
+            $branchId = $request->get('branch_id', '');
             $bioId = $request->get('bio_id', '');
             
             // Get all locations
@@ -571,7 +584,7 @@ class UnlistedLocationsController extends Controller
                         'bio_id' => $location['bio_id'],
                         'employee_name' => $location['employee_name'],
                         'date' => $date,
-                        'department' => $this->getEmployeeDepartment($location['bio_id']),
+                        'branch' => $this->getEmployeeBranch($location['bio_id']),
                         'count' => 0,
                         'records' => []
                     ];
@@ -587,11 +600,23 @@ class UnlistedLocationsController extends Controller
             });
             
             // Apply filters
-            if (!empty($department)) {
-                $lowAttendance = array_filter($lowAttendance, function($item) use ($department) {
-                    return $item['department'] === $department;
-                });
+            $branchId = $request->get('branch_id', '');
+
+            if ($branchId !== '') {
+                $lowAttendance = array_filter(
+                    $lowAttendance,
+                    function ($item) use ($branchId) {
+                        $employee = DB::connection('intra_payroll')
+                            ->table('tbl_employee')
+                            ->where('bio_id', $item['bio_id'])
+                            ->first(['branch_id']);
+
+                        return $employee &&
+                            (string) $employee->branch_id === (string) $branchId;
+                    }
+                );
             }
+
             
             if (!empty($bioId)) {
                 $lowAttendance = array_filter($lowAttendance, function($item) use ($bioId) {
@@ -619,7 +644,7 @@ class UnlistedLocationsController extends Controller
                 $data[] = [
                     'bio_id' => $item['bio_id'],
                     'employee_name' => $item['employee_name'],
-                    'department' => $item['department'] ?? 'N/A',
+                    'branch' => $item['branch'] ?? 'N/A',
                     'date' => $item['date'],
                     'count' => $item['count'],
                     'records' => count($item['records']),
@@ -662,22 +687,6 @@ class UnlistedLocationsController extends Controller
         }
     }
 
-    private function getLowAttendanceActionXXX($item)
-    {
-        return '
-            <button class="btn btn-sm btn-success export-record-btn" 
-                data-bio-id="' . htmlspecialchars($item['bio_id']) . '" 
-                data-employee-name="' . htmlspecialchars($item['employee_name']) . '" 
-                data-department="' . htmlspecialchars($item['department']) . '"
-                data-date="' . htmlspecialchars($item['date']) . '"
-                title="Export This Record">
-                <i class="fas fa-download"></i>
-            </button>
-        ';
-    }
-
-    
-    
     private function getLowAttendanceAction($item)
     {
         $isOverridden = DB::connection('intra_payroll')
@@ -688,7 +697,6 @@ class UnlistedLocationsController extends Controller
 
         $bioId = htmlspecialchars((string) $item['bio_id'], ENT_QUOTES, 'UTF-8');
         $employeeName = htmlspecialchars((string) $item['employee_name'], ENT_QUOTES, 'UTF-8');
-        $department = htmlspecialchars((string) ($item['department'] ?? ''), ENT_QUOTES, 'UTF-8');
         $date = htmlspecialchars((string) $item['date'], ENT_QUOTES, 'UTF-8');
 
         $html = '
@@ -698,7 +706,6 @@ class UnlistedLocationsController extends Controller
                     style="width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center;"
                     data-bio-id="' . $bioId . '"
                     data-employee-name="' . $employeeName . '"
-                    data-department="' . $department . '"
                     data-date="' . $date . '"
                     title="Export This Record">
                     <i class="fas fa-download"></i>
@@ -733,63 +740,47 @@ class UnlistedLocationsController extends Controller
 
 
 
-    private function getEmployeeDepartment($bioId)
+    private function getEmployeeBranch($bioId)
     {
         static $cache = [];
-        
-        if (!isset($cache[$bioId])) {
+
+        $cacheKey = (string) $bioId;
+        if (!array_key_exists($cacheKey, $cache)) {
             try {
                 $employee = DB::connection('intra_payroll')
                     ->table('tbl_employee as e')
-                    ->leftJoin('tbl_department as d', 'e.department', '=', 'd.id')
+                    ->leftJoin('tbl_branch as b', 'e.branch_id', '=', 'b.id')
                     ->where('e.bio_id', $bioId)
-                    ->first(['d.department as department_name', 'e.department']);
-                
-                if ($employee) {
-                    $cache[$bioId] = $this->sanitizeUtf8($employee->department_name ?? $employee->department ?? 'N/A');
-                } else {
-                    $cache[$bioId] = 'N/A';
-                }
-            } catch (\Exception $e) {
-                \Log::warning('Error fetching department for bio_id ' . $bioId . ': ' . $e->getMessage());
-                $cache[$bioId] = 'N/A';
+                    ->first(['b.branch as branch_name', 'e.branch_id']);
+
+                $cache[$cacheKey] = $employee
+                    ? $this->sanitizeUtf8($employee->branch_name ?? 'N/A')
+                    : 'N/A';
+            } catch (\Throwable $e) {
+                \Log::warning('Error fetching branch for bio_id ' . $bioId . ': ' . $e->getMessage());
+                $cache[$cacheKey] = 'N/A';
             }
         }
-        
-        return $cache[$bioId];
+
+        return $cache[$cacheKey];
     }
 
     public function unlistedLocationsReport()
     {
-        // Get all employees with their department names
-        $allEmployees = DB::connection('intra_payroll')
-            ->table('tbl_employee as e')
-            ->leftJoin('tbl_department as d', 'e.department', '=', 'd.id')
-            ->select('e.bio_id', 'e.first_name', 'e.last_name', 'e.department', 'd.department as department_name')
+        $db = DB::connection('intra_payroll');
+
+        $branches = $db->table('tbl_branch')
+            ->where('is_active', 1)
+            ->orderBy('branch')
+            ->get(['id', 'branch']);
+
+        $employees = $db->table('tbl_employee as e')
+            ->leftJoin('tbl_branch as b', 'e.branch_id', '=', 'b.id')
+            ->select('e.bio_id', 'e.first_name', 'e.last_name', 'e.branch_id', 'b.branch as branch_name')
+            ->orderBy('e.first_name')
             ->get();
 
-        // Extract unique department names
-        $departments = $allEmployees
-            ->pluck('department_name')
-            ->filter(function($dept) { return !empty($dept); })
-            ->unique()
-            ->sort()
-            ->values();
-
-        // Get all employees for filtering with names
-        $employees = $allEmployees
-            ->map(function($emp) {
-                return (object) [
-                    'bio_id' => $emp->bio_id,
-                    'first_name' => $emp->first_name,
-                    'last_name' => $emp->last_name,
-                    'department' => $emp->department_name ?? $emp->department
-                ];
-            })
-            ->sortBy('first_name')
-            ->values();
-
-        return view('unlisted_locations.unlisted_report', compact('departments', 'employees'));
+        return view('unlisted_locations.unlisted_report', compact('branches', 'employees'));
     }
 
     public function getUnlistedLocationsReportData(Request $request)
@@ -798,7 +789,7 @@ class UnlistedLocationsController extends Controller
             $draw = $request->get('draw', 1);
             $start = $request->get('start', 0);
             $length = $request->get('length', 10);
-            $department = $request->get('department', '');
+            $branchId = $request->get('branch_id', '');
             $bioId = $request->get('bio_id', '');
             
             // Get all locations
@@ -814,13 +805,25 @@ class UnlistedLocationsController extends Controller
             $unlistedLocations = collect($allLocations)->filter(function($location) use ($listedLocationNames) {
                 return !in_array($location['location'], $listedLocationNames);
             })->values();
-            
-            // Apply department filter
-            if (!empty($department)) {
-                $unlistedLocations = $unlistedLocations->filter(function($location) use ($department) {
-                    $empDept = $this->getEmployeeDepartment($location['bio_id']);
-                    return $empDept === $department;
-                })->values();
+            if ($branchId !== '' && $branchId !== null) {
+                $employeeBranchIds = DB::connection('intra_payroll')
+                    ->table('tbl_employee')
+                    ->where('branch_id', $branchId)
+                    ->pluck('bio_id')
+                    ->filter()
+                    ->map(function ($id) {
+                        return (string) $id;
+                    })
+                    ->unique()
+                    ->flip();
+
+                $unlistedLocations = $unlistedLocations
+                    ->filter(function ($location) use ($employeeBranchIds) {
+                        return $employeeBranchIds->has(
+                            (string) $location['bio_id']
+                        );
+                    })
+                    ->values();
             }
             
             // Apply employee filter
@@ -860,7 +863,7 @@ class UnlistedLocationsController extends Controller
                     'location' => $truncatedLocation,
                     'full_location' => $fullLocation,
                     'date_time' => $timestamp,
-                    'department' => $this->getEmployeeDepartment($location['bio_id']),
+                    'branch' => $this->getEmployeeBranch($location['bio_id']),
                 ];
             }
             
@@ -900,7 +903,7 @@ class UnlistedLocationsController extends Controller
 
     public function exportUnlistedLocations(Request $request)
     {
-        $department = $request->get('department', '');
+        $branchId = $request->get('branch_id', '');
         $bioId = $request->get('bio_id', '');
         
         // Get all locations
@@ -917,12 +920,20 @@ class UnlistedLocationsController extends Controller
             return !in_array($location['location'], $listedLocationNames);
         })->values();
         
-        // Apply department filter
-        if (!empty($department)) {
-            $unlistedLocations = $unlistedLocations->filter(function($location) use ($department) {
-                $empDept = $this->getEmployeeDepartment($location['bio_id']);
-                return $empDept === $department;
-            })->values();
+        // Apply site filter using tbl_employee.branch_id.
+        if ($branchId !== '' && $branchId !== null) {
+            $employeeBioIds = DB::connection('intra_payroll')
+                ->table('tbl_employee')
+                ->where('branch_id', $branchId)
+                ->pluck('bio_id')
+                ->map(function ($id) { return (string) $id; })
+                ->flip();
+
+            $unlistedLocations = $unlistedLocations
+                ->filter(function ($location) use ($employeeBioIds) {
+                    return $employeeBioIds->has((string) $location['bio_id']);
+                })
+                ->values();
         }
         
         // Apply employee filter
@@ -934,7 +945,7 @@ class UnlistedLocationsController extends Controller
         
         // Prepare data for Excel
         $exportData = [];
-        $exportData[] = ['Bio ID', 'Employee Name', 'Department', 'Location', 'Date & Time'];
+        $exportData[] = ['Bio ID', 'Employee Name', 'Site', 'Location', 'Date & Time'];
         
         foreach ($unlistedLocations as $location) {
             $timestamp = 'N/A';
@@ -953,7 +964,7 @@ class UnlistedLocationsController extends Controller
             $exportData[] = [
                 $location['bio_id'],
                 $location['employee_name'],
-                $this->getEmployeeDepartment($location['bio_id']),
+                $this->getEmployeeBranch($location['bio_id']),
                 $location['location'],
                 $timestamp,
             ];
@@ -971,7 +982,7 @@ class UnlistedLocationsController extends Controller
 
     public function exportLowAttendance(Request $request)
     {
-        $department = $request->get('department', '');
+        $branchId = $request->get('branch_id', '');
         $bioId = $request->get('bio_id', '');
         
         // Get all locations
@@ -1001,7 +1012,7 @@ class UnlistedLocationsController extends Controller
                     'bio_id' => $location['bio_id'],
                     'employee_name' => $location['employee_name'],
                     'date' => $date,
-                    'department' => $this->getEmployeeDepartment($location['bio_id']),
+                    'branch' => $this->getEmployeeBranch($location['bio_id']),
                     'count' => 0,
                     'records' => []
                 ];
@@ -1016,10 +1027,17 @@ class UnlistedLocationsController extends Controller
             return $item['count'] < 5;
         });
         
-        // Apply filters
-        if (!empty($department)) {
-            $lowAttendance = array_filter($lowAttendance, function($item) use ($department) {
-                return $item['department'] === $department;
+        // Apply site filter using tbl_employee.branch_id.
+        if ($branchId !== '' && $branchId !== null) {
+            $employeeBioIds = DB::connection('intra_payroll')
+                ->table('tbl_employee')
+                ->where('branch_id', $branchId)
+                ->pluck('bio_id')
+                ->map(function ($id) { return (string) $id; })
+                ->flip();
+
+            $lowAttendance = array_filter($lowAttendance, function ($item) use ($employeeBioIds) {
+                return $employeeBioIds->has((string) $item['bio_id']);
             });
         }
         
@@ -1036,7 +1054,7 @@ class UnlistedLocationsController extends Controller
         
         // Prepare data for Excel
         $exportData = [];
-        $exportData[] = ['Bio ID', 'Employee Name', 'Department', 'Date', 'Record Count', 'Timestamp', 'Location'];
+        $exportData[] = ['Bio ID', 'Employee Name', 'Site', 'Date', 'Record Count', 'Timestamp', 'Location'];
         
         foreach ($lowAttendance as $item) {
             foreach ($item['records'] as $record) {
@@ -1056,7 +1074,7 @@ class UnlistedLocationsController extends Controller
                 $exportData[] = [
                     $item['bio_id'],
                     $item['employee_name'],
-                    $item['department'],
+                    $item['branch'],
                     $item['date'],
                     $item['count'],
                     $timestamp,

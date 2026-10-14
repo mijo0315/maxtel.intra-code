@@ -143,11 +143,13 @@
                     <div class="row">
                         <div class="col-md-4">
                             <div class="form-group">
-                                <label for="unlistedDepartmentFilter"><strong>Site:</strong></label>
-                                <select class="form-control" id="unlistedDepartmentFilter">
+                                <label for="unlistedBranchFilter"><strong>Site:</strong></label>
+                                <select class="form-control" id="unlistedBranchFilter">
                                     <option value="">-- All Sites --</option>
-                                    @foreach($departments as $dept)
-                                        <option value="{{ $dept }}">{{ $dept }}</option>
+                                    @foreach($branches as $branch)
+                                        <option value="{{ $branch->id }}">
+                                            {{ $branch->branch }}
+                                        </option>
                                     @endforeach
                                 </select>
                             </div>
@@ -158,8 +160,11 @@
                                 <select class="form-control" id="unlistedEmployeeFilter">
                                     <option value="">-- All Employees --</option>
                                     @foreach($employees as $emp)
-                                        <option value="{{ $emp->bio_id }}" data-department="{{ $emp->department }}">
-                                            {{ $emp->first_name }} {{ $emp->last_name }} ({{ $emp->bio_id }})
+                                        <option
+                                            value="{{ $emp->bio_id }}"
+                                            data-branch-id="{{ $emp->branch_id }}">
+                                            {{ $emp->first_name }} {{ $emp->last_name }}
+                                            ({{ $emp->bio_id }})
                                         </option>
                                     @endforeach
                                 </select>
@@ -220,28 +225,39 @@
                     <div class="row">
                         <div class="col-md-4">
                             <div class="form-group">
-                                <label for="modalDepartmentFilter"><strong>Sites:</strong></label>
-                                <select class="form-control" id="modalDepartmentFilter">
+                                <label for="modalBranchFilter"><strong>Sites:</strong></label>
+                                <select class="form-control" id="modalBranchFilter">
                                     <option value="">-- All Sites --</option>
-                                    @foreach($departments as $dept)
-                                        <option value="{{ $dept }}">{{ $dept }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="form-group">
-                                <label for="modalEmployeeFilter"><strong>Employee:</strong></label>
-                                <select class="form-control" id="modalEmployeeFilter">
-                                    <option value="">-- All Employees --</option>
-                                    @foreach($employees as $emp)
-                                        <option value="{{ $emp->bio_id }}" data-department="{{ $emp->department }}">
-                                            {{ $emp->first_name }} {{ $emp->last_name }} ({{ $emp->bio_id }})
+                                    @foreach($branches as $branch)
+                                        <option value="{{ $branch->id }}">
+                                            {{ $branch->branch }}
                                         </option>
                                     @endforeach
                                 </select>
                             </div>
                         </div>
+                        
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="modalEmployeeFilter">
+                                    <strong>Employee:</strong>
+                                </label>
+
+                                <select class="form-control" id="modalEmployeeFilter">
+                                    <option value="">-- All Employees --</option>
+
+                                    @foreach($employees as $emp)
+                                        <option
+                                            value="{{ $emp->bio_id }}"
+                                            data-branch-id="{{ $emp->branch_id }}">
+                                            {{ $emp->first_name }} {{ $emp->last_name }}
+                                            ({{ $emp->bio_id }})
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                        </div>
+
                         <div class="col-md-4">
                             <div class="form-group">
                                 <button class="btn btn-primary btn-block" id="modalApplyFilters" style="margin-top: 32px;">
@@ -293,7 +309,7 @@
 $(document).ready(function() {
     // Initialize Select2 on modal dropdowns when modal is opened
     $('#reportModal').on('shown.bs.modal', function() {
-        $('#modalDepartmentFilter').select2({
+        $('#modalBranchFilter').select2({
             theme: 'bootstrap-5',
             placeholder: '-- All Sites --',
             allowClear: true,
@@ -391,7 +407,7 @@ $(document).ready(function() {
                 $('#modalLowAttendanceTable').DataTable().destroy();
             }
 
-            const department = $('#modalDepartmentFilter').val();
+            const branchId = $('#modalBranchFilter').val();
             const bioId = $('#modalEmployeeFilter').val();
 
             $('#modalLowAttendanceTable').DataTable({
@@ -408,7 +424,7 @@ $(document).ready(function() {
                     type: 'POST',
                     data: function (d) {
                         d._token = "{{ csrf_token() }}";
-                        d.department = department;
+                        d.branch_id = branchId;
                         d.bio_id = bioId;
                     }
                 },
@@ -416,7 +432,7 @@ $(document).ready(function() {
                 columns: [
                     { data: 'bio_id' },
                     { data: 'employee_name' },
-                    { data: 'department' },
+                    { data: 'branch' },
                     { data: 'date' },
 
                     {
@@ -444,45 +460,6 @@ $(document).ready(function() {
             });
         }
 
-
-        function initializeModalReportTableXXX() {
-            if ($.fn.DataTable.isDataTable('#modalLowAttendanceTable')) {
-                $('#modalLowAttendanceTable').DataTable().destroy();
-            }
-
-            const department = $('#modalDepartmentFilter').val();
-            const bioId = $('#modalEmployeeFilter').val();
-
-            $('#modalLowAttendanceTable').DataTable({
-                "bDestroy": true,
-                "autoWidth": false,
-                "searching": true,
-                "processing": true,
-                "serverSide": true,
-                "order": [[3, 'desc']],
-                "pageLength": 10,
-                "ajax": {
-                    "url": "{{ route('low_attendance_data') }}",
-                    "dataType": "json",
-                    "type": "POST",
-                    "data": {
-                        "_token": "{{ csrf_token() }}",
-                        "department": department,
-                        "bio_id": bioId
-                    }
-                },
-                "columns": [
-                    {'data': 'bio_id'},
-                    {'data': 'employee_name'},
-                    {'data': 'department'},
-                    {'data': 'date'},
-                    {'data': 'count', 'render': function(data) { 
-                        return '<span class="badge badge-danger">' + data + '/5</span>'; 
-                    }},
-                    {'data': 'action', 'orderable': false, 'searchable': false, 'render': function(data) { return data; }},
-                ]
-            });
-        }
 
         
         $(document).on('click','.low-attendance-override, .low-attendance-undo',function () {
@@ -555,53 +532,53 @@ $(document).ready(function() {
 
         // Handle modal export button
         $(document).on('click', '#modalExportBtn', function() {
-            const department = $('#modalDepartmentFilter').val();
+            const branchId = $('#modalBranchFilter').val();
             const bioId = $('#modalEmployeeFilter').val();
 
             let url = "{{ route('export_low_attendance') }}";
-            if (department) {
-                url += "?department=" + encodeURIComponent(department);
+            if (branchId) {
+                url += "?branch_id=" + encodeURIComponent(branchId);
             }
             if (bioId) {
-                url += (department ? "&" : "?") + "bio_id=" + encodeURIComponent(bioId);
+                url += (branchId ? "&" : "?") + "bio_id=" + encodeURIComponent(bioId);
             }
 
             window.location.href = url;
         });
 
-        // Auto-filter employees by selected department in modal
-        $(document).on('change', '#modalDepartmentFilter', function() {
-            const selectedDept = $(this).val();
+        // Auto-filter employees by selected branch in modal
+        $(document).on('change', '#modalBranchFilter', function () {
+            const selectedBranchId = String($(this).val() || '');
             const employeeSelect = $('#modalEmployeeFilter');
-            
-            if (selectedDept) {
-                employeeSelect.find('option').each(function() {
-                    const dept = $(this).data('department');
-                    if ($(this).val() === '' || dept === selectedDept) {
-                        $(this).show();
-                    } else {
-                        $(this).hide();
-                    }
-                });
-                employeeSelect.val('').trigger('change');
-            } else {
-                employeeSelect.find('option').show();
-                employeeSelect.val('').trigger('change');
-            }
+
+            employeeSelect.find('option').each(function () {
+                const option = $(this);
+                const branchId = String(option.attr('data-branch-id') || '');
+
+                if (
+                    option.val() === '' ||
+                    !selectedBranchId ||
+                    branchId === selectedBranchId
+                ) {
+                    option.prop('disabled', false).show();
+                } else {
+                    option.prop('disabled', true).hide();
+                }
+            });
+
+            // Reset employee selection when the site changes.
+            employeeSelect.val('').trigger('change');
         });
+
 
         // Handle export record button clicks in modal
         $(document).on('click', '.export-record-btn', function(e) {
             e.preventDefault();
             const bioId = $(this).data('bio-id');
-            const department = $(this).data('department');
 
             let url = "{{ route('export_low_attendance') }}";
-            if (department) {
-                url += "?department=" + encodeURIComponent(department);
-            }
             if (bioId) {
-                url += (department ? "&" : "?") + "bio_id=" + encodeURIComponent(bioId);
+                url += "?bio_id=" + encodeURIComponent(bioId);
             }
 
             window.location.href = url;
@@ -609,7 +586,7 @@ $(document).ready(function() {
 
         // Handle Unlisted Report Modal
         $('#unlistedReportModal').on('shown.bs.modal', function() {
-            $('#unlistedDepartmentFilter').select2({
+            $('#unlistedBranchFilter').select2({
                 theme: 'bootstrap-5',
                 placeholder: '-- All Sites --',
                 allowClear: true,
@@ -633,7 +610,7 @@ $(document).ready(function() {
                 $('#modalUnlistedLocationsTable').DataTable().destroy();
             }
 
-            const department = $('#unlistedDepartmentFilter').val();
+            const branchId = $('#unlistedBranchFilter').val();
             const bioId = $('#unlistedEmployeeFilter').val();
 
             $('#modalUnlistedLocationsTable').DataTable({
@@ -650,14 +627,14 @@ $(document).ready(function() {
                     "type": "POST",
                     "data": {
                         "_token": "{{ csrf_token() }}",
-                        "department": department,
+                        "branch_id": branchId,
                         "bio_id": bioId
                     }
                 },
                 "columns": [
                     {'data': 'bio_id'},
                     {'data': 'employee_name'},
-                    {'data': 'department'},
+                    {'data': 'branch'},
                     {'data': 'location'},
                     {'data': 'date_time'},
                 ]
@@ -671,40 +648,44 @@ $(document).ready(function() {
 
         // Handle unlisted export button
         $(document).on('click', '#unlistedExportBtn', function() {
-            const department = $('#unlistedDepartmentFilter').val();
+            const branchId = $('#unlistedBranchFilter').val();
             const bioId = $('#unlistedEmployeeFilter').val();
 
             let url = "{{ route('export_unlisted_locations') }}";
-            if (department) {
-                url += "?department=" + encodeURIComponent(department);
+            if (branchId) {
+                url += "?branch_id=" + encodeURIComponent(branchId);
             }
             if (bioId) {
-                url += (department ? "&" : "?") + "bio_id=" + encodeURIComponent(bioId);
+                url += (branchId ? "&" : "?") + "bio_id=" + encodeURIComponent(bioId);
             }
 
             window.location.href = url;
         });
 
-        // Auto-filter employees by selected department in unlisted modal
-        $(document).on('change', '#unlistedDepartmentFilter', function() {
-            const selectedDept = $(this).val();
+        // Auto-filter employees by selected branch in unlisted modal
+        $(document).on('change', '#unlistedBranchFilter', function () {
+            const selectedBranchId = String($(this).val() || '');
             const employeeSelect = $('#unlistedEmployeeFilter');
-            
-            if (selectedDept) {
-                employeeSelect.find('option').each(function() {
-                    const dept = $(this).data('department');
-                    if ($(this).val() === '' || dept === selectedDept) {
-                        $(this).show();
-                    } else {
-                        $(this).hide();
-                    }
-                });
-                employeeSelect.val('').trigger('change');
-            } else {
-                employeeSelect.find('option').show();
-                employeeSelect.val('').trigger('change');
-            }
+
+            employeeSelect.find('option').each(function () {
+                const option = $(this);
+                const branchId = String(option.attr('data-branch-id') || '');
+
+                if (
+                    option.val() === '' ||
+                    !selectedBranchId ||
+                    branchId === selectedBranchId
+                ) {
+                    option.prop('disabled', false).show();
+                } else {
+                    option.prop('disabled', true).hide();
+                }
+            });
+
+            // Reset employee selection when the site changes.
+            employeeSelect.val('').trigger('change');
         });
+
     });
 </script>
 @endsection
