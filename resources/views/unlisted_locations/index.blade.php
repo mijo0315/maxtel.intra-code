@@ -424,8 +424,8 @@ $(document).ready(function() {
                     type: 'POST',
                     data: function (d) {
                         d._token = "{{ csrf_token() }}";
-                        d.branch_id = branchId;
-                        d.bio_id = bioId;
+                        d.branch_id = $('#modalBranchFilter').val() || '';
+                        d.bio_id = $('#modalEmployeeFilter').val() || '';
                     }
                 },
 
