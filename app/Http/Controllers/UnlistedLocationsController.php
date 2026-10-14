@@ -609,7 +609,7 @@ class UnlistedLocationsController extends Controller
             // Paginate
             $data = [];
             foreach (array_slice($lowAttendance, $start, $length) as $item) {
-                
+
                 $isOverridden = DB::connection('intra_payroll')
                 ->table('low_attendance_overrides')
                 ->where('bio_id', $item['bio_id'])
@@ -677,6 +677,7 @@ class UnlistedLocationsController extends Controller
     }
 
     
+    
     private function getLowAttendanceAction($item)
     {
         $isOverridden = DB::connection('intra_payroll')
@@ -690,47 +691,46 @@ class UnlistedLocationsController extends Controller
         $department = htmlspecialchars((string) ($item['department'] ?? ''), ENT_QUOTES, 'UTF-8');
         $date = htmlspecialchars((string) $item['date'], ENT_QUOTES, 'UTF-8');
 
-        $html = '';
+        $html = '
+            <div style="display: flex; align-items: center; gap: 6px; white-space: nowrap; min-width: 75px;">
+                <button type="button"
+                    class="btn btn-sm btn-success export-record-btn"
+                    style="width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center;"
+                    data-bio-id="' . $bioId . '"
+                    data-employee-name="' . $employeeName . '"
+                    data-department="' . $department . '"
+                    data-date="' . $date . '"
+                    title="Export This Record">
+                    <i class="fas fa-download"></i>
+                </button>';
 
-        // Preserve the existing Export This Record button.
-        $html .= '
-            <button type="button"
-                class="btn btn-sm btn-success export-record-btn"
-                data-bio-id="' . $bioId . '"
-                data-employee-name="' . $employeeName . '"
-                data-department="' . $department . '"
-                data-date="' . $date . '"
-                title="Export This Record">
-                <i class="fas fa-download"></i>
-            </button>
-        ';
-
-        // Show Undo Override if already overridden.
         if ($isOverridden) {
             $html .= '
                 <button type="button"
                     class="btn btn-sm btn-warning low-attendance-undo"
+                    style="width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center;"
                     data-bio-id="' . $bioId . '"
                     data-date="' . $date . '"
                     title="Undo Attendance Override">
                     <i class="fas fa-undo"></i>
-                </button>
-            ';
+                </button>';
         } else {
-            // Otherwise, allow the user to override attendance.
             $html .= '
                 <button type="button"
                     class="btn btn-sm btn-primary low-attendance-override"
+                    style="width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center;"
                     data-bio-id="' . $bioId . '"
                     data-date="' . $date . '"
                     title="Override Attendance">
                     <i class="fas fa-check"></i>
-                </button>
-            ';
+                </button>';
         }
+
+        $html .= '</div>';
 
         return $html;
     }
+
 
 
     private function getEmployeeDepartment($bioId)
