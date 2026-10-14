@@ -609,6 +609,13 @@ class UnlistedLocationsController extends Controller
             // Paginate
             $data = [];
             foreach (array_slice($lowAttendance, $start, $length) as $item) {
+                
+                $isOverridden = DB::connection('intra_payroll')
+                ->table('low_attendance_overrides')
+                ->where('bio_id', $item['bio_id'])
+                ->where('attendance_date', $item['date'])
+                ->exists();
+
                 $data[] = [
                     'bio_id' => $item['bio_id'],
                     'employee_name' => $item['employee_name'],
@@ -616,6 +623,7 @@ class UnlistedLocationsController extends Controller
                     'date' => $item['date'],
                     'count' => $item['count'],
                     'records' => count($item['records']),
+                    'is_overridden' => $isOverridden,
                     'action' => $this->getLowAttendanceAction($item),
                 ];
             }
@@ -654,7 +662,7 @@ class UnlistedLocationsController extends Controller
         }
     }
 
-    private function getLowAttendanceAction($item)
+    private function getLowAttendanceActionXXX($item)
     {
         return '
             <button class="btn btn-sm btn-success export-record-btn" 
@@ -667,6 +675,63 @@ class UnlistedLocationsController extends Controller
             </button>
         ';
     }
+
+    
+    private function getLowAttendanceAction($item)
+    {
+        $isOverridden = DB::connection('intra_payroll')
+            ->table('low_attendance_overrides')
+            ->where('bio_id', $item['bio_id'])
+            ->where('attendance_date', $item['date'])
+            ->exists();
+
+        $bioId = htmlspecialchars((string) $item['bio_id'], ENT_QUOTES, 'UTF-8');
+        $employeeName = htmlspecialchars((string) $item['employee_name'], ENT_QUOTES, 'UTF-8');
+        $department = htmlspecialchars((string) ($item['department'] ?? ''), ENT_QUOTES, 'UTF-8');
+        $date = htmlspecialchars((string) $item['date'], ENT_QUOTES, 'UTF-8');
+
+        $html = '';
+
+        // Preserve the existing Export This Record button.
+        $html .= '
+            <button type="button"
+                class="btn btn-sm btn-success export-record-btn"
+                data-bio-id="' . $bioId . '"
+                data-employee-name="' . $employeeName . '"
+                data-department="' . $department . '"
+                data-date="' . $date . '"
+                title="Export This Record">
+                <i class="fas fa-download"></i>
+            </button>
+        ';
+
+        // Show Undo Override if already overridden.
+        if ($isOverridden) {
+            $html .= '
+                <button type="button"
+                    class="btn btn-sm btn-warning low-attendance-undo"
+                    data-bio-id="' . $bioId . '"
+                    data-date="' . $date . '"
+                    title="Undo Attendance Override">
+                    <i class="fas fa-undo"></i>
+                </button>
+            ';
+        } else {
+            // Otherwise, allow the user to override attendance.
+            $html .= '
+                <button type="button"
+                    class="btn btn-sm btn-primary low-attendance-override"
+                    data-bio-id="' . $bioId . '"
+                    data-date="' . $date . '"
+                    title="Override Attendance">
+                    <i class="fas fa-check"></i>
+                </button>
+            ';
+        }
+
+        return $html;
+    }
+
 
     private function getEmployeeDepartment($bioId)
     {
@@ -1016,4 +1081,57 @@ class UnlistedLocationsController extends Controller
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
         ]);
     }
+
+    
+    public function overrideLowAttendance(Request $request)
+    {
+        $request->validate([
+            'bio_id' => 'required|string|max:50',
+            'date' => 'required|date_format:Y-m-d',
+            'action' => 'required|in:override,undo',
+        ]);
+
+        try {
+            $db = DB::connection('intra_payroll');
+
+            if ($request->action === 'override') {
+                $db->table('low_attendance_overrides')->updateOrInsert(
+                    [
+                        'bio_id' => $request->bio_id,
+                        'attendance_date' => $request->date,
+                    ],
+                    [
+                        'overridden_by' => auth()->id(),
+                        'created_at' => now(),
+                    ]
+                );
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Attendance override saved successfully.',
+                ]);
+            }
+
+            $deleted = $db->table('low_attendance_overrides')
+                ->where('bio_id', $request->bio_id)
+                ->where('attendance_date', $request->date)
+                ->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => $deleted
+                    ? 'Attendance override removed successfully.'
+                    : 'No active override was found.',
+            ]);
+
+        } catch (\Throwable $e) {
+            \Log::error('Low attendance override error: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to update the attendance override.',
+            ], 500);
+        }
+    }
+
 }

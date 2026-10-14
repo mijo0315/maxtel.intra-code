@@ -2810,16 +2810,33 @@ class payrollController extends Controller
                                                     $late = 0;
                                                     $undertime = 0;
                                                 }
-                                                //ABSENT kapag hindi 5 ang raw logs
-                                                $emp_raw_logs_count = DB::connection("intra_payroll")
-                                                ->table("tbl_raw_logs")
-                                                ->where("biometric_id", $emp_data["bio_id"])
-                                                ->whereDate("logs", $cur_date)
-                                                ->count();
-                                                $emp_hr_group = $emp_data["hr_group"]; //site maxtel at site pm comment muna
-                                                // if($emp_raw_logs_count < 5 && ($emp_hr_group == "group_c" || $emp_hr_group == "group_e")){
-                                                //     $absent = true;
-                                                // }
+                                                //ABSENT kapag hindi 5 ang raw logs // Oct 14 2026 updated
+                                                $emp_raw_logs_count = DB::connection('intra_payroll')
+                                                    ->table('tbl_raw_logs')
+                                                    ->where('biometric_id', $emp_data['bio_id'])
+                                                    ->whereDate('logs', $cur_date)
+                                                    ->count();
+
+                                                $emp_hr_group = $emp_data['hr_group'];
+
+                                                // Check whether this employee has an attendance override
+                                                // for the specific date currently being processed.
+                                                $hasAttendanceOverride = DB::connection('intra_payroll')
+                                                    ->table('low_attendance_overrides')
+                                                    ->where('bio_id', $emp_data['bio_id'])
+                                                    ->where('attendance_date', $cur_date)
+                                                    ->exists();
+
+                                                // Original rule: fewer than 5 raw logs means absent
+                                                // for group_c and group_e, unless an override exists.
+                                                if (
+                                                    $emp_raw_logs_count < 5 &&
+                                                    ($emp_hr_group == 'group_c' || $emp_hr_group == 'group_e') &&
+                                                    !$hasAttendanceOverride
+                                                ) {
+                                                    $absent = true;
+                                                }
+
                                                 //end absent condition
                                                 //absent kapag wala sa listed location
                                                 $has_manual_timecard = DB::connection("intra_payroll")

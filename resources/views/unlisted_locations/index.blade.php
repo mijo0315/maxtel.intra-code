@@ -385,8 +385,67 @@ $(document).ready(function() {
         $('#reportModal').on('shown.bs.modal', function() {
             initializeModalReportTable();
         });
-
+        
         function initializeModalReportTable() {
+            if ($.fn.DataTable.isDataTable('#modalLowAttendanceTable')) {
+                $('#modalLowAttendanceTable').DataTable().destroy();
+            }
+
+            const department = $('#modalDepartmentFilter').val();
+            const bioId = $('#modalEmployeeFilter').val();
+
+            $('#modalLowAttendanceTable').DataTable({
+                bDestroy: true,
+                autoWidth: false,
+                searching: true,
+                processing: true,
+                serverSide: true,
+                order: [[3, 'desc']],
+                pageLength: 10,
+
+                ajax: {
+                    url: "{{ route('low_attendance_data') }}",
+                    type: 'POST',
+                    data: function (d) {
+                        d._token = "{{ csrf_token() }}";
+                        d.department = department;
+                        d.bio_id = bioId;
+                    }
+                },
+
+                columns: [
+                    { data: 'bio_id' },
+                    { data: 'employee_name' },
+                    { data: 'department' },
+                    { data: 'date' },
+
+                    {
+                        data: 'count',
+                        render: function (data, type, row) {
+                            if (row.is_overridden) {
+                                return '<span class="badge badge-success">' +
+                                    data + '/5 - Overridden</span>';
+                            }
+
+                            return '<span class="badge badge-danger">' +
+                                data + '/5</span>';
+                        }
+                    },
+
+                    {
+                        data: 'action',
+                        orderable: false,
+                        searchable: false,
+                        render: function (data) {
+                            return data;
+                        }
+                    }
+                ]
+            });
+        }
+
+
+        function initializeModalReportTableXXX() {
             if ($.fn.DataTable.isDataTable('#modalLowAttendanceTable')) {
                 $('#modalLowAttendanceTable').DataTable().destroy();
             }
@@ -424,6 +483,70 @@ $(document).ready(function() {
                 ]
             });
         }
+
+        
+        $(document).on('click','.low-attendance-override, .low-attendance-undo',function () {
+            const button = $(this);
+            const isUndo = button.hasClass('low-attendance-undo');
+
+            const bioId = button.data('bio-id');
+            const date = button.data('date');
+
+            const action = isUndo ? 'undo' : 'override';
+
+            const message = isUndo
+                ? 'Undo the attendance override for this employee and date?'
+                : 'Override low attendance for this employee and date?';
+
+            if (!confirm(message)) {
+                return;
+            }
+
+            button.prop('disabled', true);
+
+            $.ajax({
+                url: "{{ route('low_attendance_override') }}",
+                type: 'POST',
+                dataType: 'json',
+                data: {
+                    _token: "{{ csrf_token() }}",
+                    bio_id: bioId,
+                    date: date,
+                    action: action
+                },
+
+                success: function (response) {
+                    if (response.success) {
+                        alert(response.message);
+
+                        if ($.fn.DataTable.isDataTable(
+                            '#modalLowAttendanceTable'
+                        )) {
+                            $('#modalLowAttendanceTable')
+                                .DataTable()
+                                .ajax.reload(null, false);
+                        }
+                    } else {
+                        alert(response.message || 'Unable to update attendance.');
+                    }
+                },
+
+                error: function (xhr) {
+                    let message = 'An error occurred while updating attendance.';
+
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        message = xhr.responseJSON.message;
+                    }
+
+                    alert(message);
+                },
+
+                complete: function () {
+                    button.prop('disabled', false);
+                }
+            });
+        });
+
 
         // Handle modal apply filters button
         $(document).on('click', '#modalApplyFilters', function() {

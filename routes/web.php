@@ -338,6 +338,9 @@ Route::get('export-low-attendance', [UnlistedLocationsController::class, 'export
 Route::get('unlisted-locations-report', [UnlistedLocationsController::class, 'unlistedLocationsReport'])->middleware(['auth'])->name('unlisted_locations_report');
 Route::post('unlisted-locations-report-data', [UnlistedLocationsController::class, 'getUnlistedLocationsReportData'])->middleware(['auth'])->name('unlisted_locations_report_data');
 Route::get('export-unlisted-locations', [UnlistedLocationsController::class, 'exportUnlistedLocations'])->middleware(['auth'])->name('export_unlisted_locations');
+//override low attendance record
+Route::post('low-attendance-override',[UnlistedLocationsController::class, 'overrideLowAttendance'])->middleware(['auth'])->name('low_attendance_override');
+
         //TEMPO
 Route::get('/', function () {  
     return redirect('login'); 
