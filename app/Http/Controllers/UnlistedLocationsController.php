@@ -548,7 +548,177 @@ class UnlistedLocationsController extends Controller
         return view('unlisted_locations.report', compact('branches', 'employees'));
     }
 
+    
     public function getLowAttendanceData(Request $request)
+    {
+        try {
+            $draw = (int) $request->input('draw', 1);
+            $start = max(0, (int) $request->input('start', 0));
+            $length = (int) $request->input('length', 10);
+
+            $branchId = $request->input('branch_id', '');
+            $bioId = $request->input('bio_id', '');
+
+            // Get all location records from both sources.
+            $allLocations = $this->getAllLocations();
+
+            // Load employee branch information in one query.
+            $employees = DB::connection('intra_payroll')
+                ->table('tbl_employee as e')
+                ->leftJoin('tbl_branch as b', 'e.branch_id', '=', 'b.id')
+                ->select(
+                    'e.bio_id',
+                    'e.branch_id',
+                    'b.branch'
+                )
+                ->get()
+                ->keyBy(function ($employee) {
+                    return (string) $employee->bio_id;
+                });
+
+            // Group location records by employee and date.
+            $groupedByEmployeeDate = [];
+
+            foreach ($allLocations as $location) {
+                $locationBioId = (string) ($location['bio_id'] ?? '');
+
+                if ($locationBioId === '') {
+                    continue;
+                }
+
+                $date = 'Unknown';
+                $timestamp = $location['phone_timestamp'] ?? null;
+
+                if (!empty($timestamp)) {
+                    try {
+                        if (is_numeric($timestamp) && strlen((string) $timestamp) == 10) {
+                            $date = \Carbon\Carbon::createFromTimestamp(
+                                (int) $timestamp
+                            )->format('Y-m-d');
+                        } else {
+                            $date = \Carbon\Carbon::parse(
+                                $timestamp
+                            )->format('Y-m-d');
+                        }
+                    } catch (\Throwable $e) {
+                        // Keep date as Unknown if timestamp is invalid.
+                    }
+                }
+
+                $key = $locationBioId . '_' . $date;
+
+                if (!isset($groupedByEmployeeDate[$key])) {
+                    $employee = $employees->get($locationBioId);
+
+                    $groupedByEmployeeDate[$key] = [
+                        'bio_id' => $locationBioId,
+                        'employee_name' => $location['employee_name'] ?? 'Unknown',
+                        'date' => $date,
+                        'branch_id' => $employee->branch_id ?? null,
+                        'branch' => $employee->branch ?? 'N/A',
+                        'count' => 0,
+                        'records' => [],
+                    ];
+                }
+
+                $groupedByEmployeeDate[$key]['count']++;
+                $groupedByEmployeeDate[$key]['records'][] = $location;
+            }
+
+            // Keep records with fewer than five entries.
+            $lowAttendance = array_filter(
+                $groupedByEmployeeDate,
+                function ($item) {
+                    return $item['count'] < 5;
+                }
+            );
+
+            // Apply site filter only when a branch is selected.
+            if ($branchId !== '' && $branchId !== null) {
+                $lowAttendance = array_filter(
+                    $lowAttendance,
+                    function ($item) use ($branchId) {
+                        return (string) ($item['branch_id'] ?? '') ===
+                            (string) $branchId;
+                    }
+                );
+            }
+
+            // Apply employee filter only when an employee is selected.
+            if ($bioId !== '' && $bioId !== null) {
+                $lowAttendance = array_filter(
+                    $lowAttendance,
+                    function ($item) use ($bioId) {
+                        return (string) $item['bio_id'] === (string) $bioId;
+                    }
+                );
+            }
+
+            // Sort newest date first.
+            usort($lowAttendance, function ($a, $b) {
+                return strcmp($b['date'], $a['date']);
+            });
+
+            $totalRecords = count($lowAttendance);
+
+            // Apply DataTables pagination.
+            $pagedRecords = array_slice(
+                $lowAttendance,
+                $start,
+                $length < 0 ? null : $length
+            );
+
+            $data = [];
+
+            foreach ($pagedRecords as $item) {
+                $isOverridden = false;
+
+                // Do not query overrides for invalid dates.
+                if ($item['date'] !== 'Unknown') {
+                    $isOverridden = DB::connection('intra_payroll')
+                        ->table('low_attendance_overrides')
+                        ->where('bio_id', $item['bio_id'])
+                        ->where('attendance_date', $item['date'])
+                        ->exists();
+                }
+
+                $data[] = [
+                    'bio_id' => $item['bio_id'],
+                    'employee_name' => $item['employee_name'],
+                    'branch' => $item['branch'],
+                    'date' => $item['date'],
+                    'count' => $item['count'],
+                    'records' => count($item['records']),
+                    'is_overridden' => $isOverridden,
+                    'action' => $this->getLowAttendanceAction($item),
+                ];
+            }
+
+            return response()->json([
+                'draw' => $draw,
+                'recordsTotal' => $totalRecords,
+                'recordsFiltered' => $totalRecords,
+                'data' => $data,
+            ], 200, [], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+
+        } catch (\Throwable $e) {
+            \Log::error(
+                'Error in getLowAttendanceData: ' .
+                $e->getMessage() . ' ' .
+                $e->getTraceAsString()
+            );
+
+            return response()->json([
+                'draw' => (int) $request->input('draw', 1),
+                'recordsTotal' => 0,
+                'recordsFiltered' => 0,
+                'data' => [],
+            ]);
+        }
+    }
+
+
+    public function getLowAttendanceDataXX(Request $request)
     {
         try {
             $draw = $request->get('draw', 1);
