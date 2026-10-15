@@ -2831,7 +2831,6 @@ class payrollController extends Controller
                                                     ->table('tbl_timecard')
                                                     ->where('emp_id', $emp_id)
                                                     ->whereDate('target_date', $cur_date)
-                                                    ->where('is_manual', 1)
                                                     ->where(function ($query) {
                                                         $query->whereNotNull('AM_IN')
                                                             ->orWhereNotNull('PM_OUT');
