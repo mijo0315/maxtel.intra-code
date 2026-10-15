@@ -2819,23 +2819,38 @@ class payrollController extends Controller
 
                                                 $emp_hr_group = $emp_data['hr_group'];
 
-                                                // Check whether this employee has an attendance override
-                                                // for the specific date currently being processed.
+                                                // Check whether an explicit attendance override exists.
                                                 $hasAttendanceOverride = DB::connection('intra_payroll')
                                                     ->table('low_attendance_overrides')
                                                     ->where('bio_id', $emp_data['bio_id'])
                                                     ->where('attendance_date', $cur_date)
                                                     ->exists();
 
-                                                // Original rule: fewer than 5 raw logs means absent
-                                                // for group_c and group_e, unless an override exists.
+                                                // Check for a valid manual timecard for this date.
+                                                $hasManualTimecard = DB::connection('intra_payroll')
+                                                    ->table('tbl_timecard')
+                                                    ->where('emp_id', $emp_id)
+                                                    ->whereDate('target_date', $cur_date)
+                                                    ->where('is_manual', 1)
+                                                    ->where(function ($query) {
+                                                        $query->whereNotNull('AM_IN')
+                                                            ->orWhereNotNull('PM_OUT');
+                                                    })
+                                                    ->exists();
+
+                                                // Apply the original low-attendance rule only when:
+                                                // 1. Fewer than five raw logs exist.
+                                                // 2. No valid manual timecard exists.
+                                                // 3. No explicit attendance override exists.
                                                 if (
                                                     $emp_raw_logs_count < 5 &&
-                                                    ($emp_hr_group == 'group_c' || $emp_hr_group == 'group_e') &&
+                                                    in_array($emp_hr_group, ['group_c', 'group_e']) &&
+                                                    !$hasManualTimecard &&
                                                     !$hasAttendanceOverride
                                                 ) {
                                                     $absent = true;
                                                 }
+
 
                                                 //end absent condition
                                                 //absent kapag wala sa listed location
