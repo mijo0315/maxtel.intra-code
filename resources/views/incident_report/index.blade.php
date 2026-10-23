@@ -316,6 +316,13 @@
                                                 <i class="fa fa-eye"></i>
                                             </button>
                                             @if(!$isReadOnly)
+                                                <a href="{{ route('incident-report.edit', $report->id) }}"
+                                                class="btn btn-sm btn-success"
+                                                title="Edit Incident Report">
+                                                    <i class="fa fa-edit"></i>
+                                                </a>
+                                            @endif
+                                            @if(!$isReadOnly)
                                                 @php
                                                     // Check if NTE exists for this incident report
                                                     $nteNote = \App\Models\NteNote::where('incident_report_id', $report->id)->first();

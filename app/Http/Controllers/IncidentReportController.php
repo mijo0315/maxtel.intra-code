@@ -164,6 +164,75 @@ class IncidentReportController extends Controller
         return view('incident_report.index', compact('employees', 'isReadOnly', 'incidentReports', 'myIncidentReports', 'employee', 'search'));
     }
 
+    private function canManageIncidentReport($report)
+    {
+        $user = Auth::user();
+
+        // Read-only permission
+        $routeName = 'incident_report';
+        $userAccess = $user->access[$routeName] ?? null;
+        $userPermission = $userAccess['access'] ?? null;
+
+        $isReadOnly = $userPermission === '3' ||
+            (
+                preg_match("/R/i", $userPermission ?? '') &&
+                !preg_match("/C|U/i", $userPermission ?? '')
+            );
+
+        // Read-only users cannot edit.
+        if ($isReadOnly) {
+            return false;
+        }
+
+        $role_id = $user->role_id;
+
+        $currentEmployee = Employee::where('user_id', $user->id)->first();
+        $currentEmployeeId = $currentEmployee
+            ? $currentEmployee->id
+            : null;
+
+        $role_id_all = [1, 4, 5, 27];
+
+        // Admin and all-access roles
+        if (in_array($role_id, $role_id_all)) {
+            return true;
+        }
+
+        // HR Group B,C
+        if ($role_id === 14) {
+            return IncidentReport::where('id', $report->id)
+                ->whereHas('reportedByEmployee', function ($q) use ($user) {
+                    $q->where(function ($subQ) use ($user) {
+                        $subQ->whereIn('hr_group', [
+                            'group_b',
+                            'group_c
+                        '])
+                        ->orWhere('user_id', $user->id);
+                    });
+                })
+                ->exists();
+        }
+
+        // HR Group C,E
+        if ($role_id === 15) {
+            return IncidentReport::where('id', $report->id)
+                ->whereHas('reportedByEmployee', function ($q) use ($user) {
+                    $q->where(function ($subQ) use ($user) {
+                        $subQ->whereIn('hr_group', [
+                            'group_c',
+                            'group_e
+                        '])
+                        ->orWhere('user_id', $user->id);
+                    });
+                })
+                ->exists();
+        }
+
+        // Other roles: reports they created
+        return $currentEmployeeId &&
+            $report->reported_by == $currentEmployeeId;
+    }
+
     /**
      * Show the form for creating a new incident report.
      */
@@ -345,8 +414,91 @@ class IncidentReportController extends Controller
      */
     public function edit($id)
     {
-        // $report = IncidentReport::findOrFail($id);
-        // return view('incident_report.edit', compact('report'));
+        $report = IncidentReport::findOrFail($id);
+
+        // Follow the same report access conditions as index().
+        if (!$this->canManageIncidentReport($report)) {
+            abort(403, 'You do not have permission to edit this incident report.');
+        }
+
+        $role_id = Auth::user()->role_id;
+
+        // Employee dropdown: same conditions as index().
+        $query = Employee::where('tbl_employee.is_active', 1);
+
+        $role_id_all = [1, 4, 5, 27];
+
+        if (in_array($role_id, $role_id_all)) {
+
+            $employees = $query->get();
+
+        } elseif ($role_id === 14) {
+
+            $employees = $query->where(function ($q) {
+                $q->whereIn('tbl_employee.hr_group', [
+                    'group_b',
+                    'group_c'
+                ])->orWhere('tbl_employee.user_id', Auth::user()->id);
+            })->get();
+
+        } elseif ($role_id === 15) {
+
+            $employees = $query->where(function ($q) {
+                $q->whereIn('tbl_employee.hr_group', [
+                    'group_c',
+                    'group_e'
+                ])->orWhere('tbl_employee.user_id', Auth::user()->id);
+            })->get();
+
+        } else {
+
+            $employees = $query
+                ->where('tbl_employee.user_id', Auth::user()->id)
+                ->get();
+        }
+
+        // Load employee position names, same as index().
+        foreach ($employees as $emp) {
+            if ($emp->position_id) {
+                try {
+                    $position = \DB::connection('intra_payroll')
+                        ->table('lib_position')
+                        ->where('id', (int) $emp->position_id)
+                        ->value('name');
+
+                    if ($position) {
+                        $emp->position_name = $position;
+                    }
+                } catch (\Exception $e) {
+                    // Silently fail
+                }
+            }
+        }
+
+        // Decode involved employees.
+        $involvedIds = json_decode($report->name_involved, true);
+
+        if (!is_array($involvedIds)) {
+            $involvedIds = $report->name_involved
+                ? [(int) $report->name_involved]
+                : [];
+        }
+
+        // Decode witnesses.
+        $witnessIds = json_decode($report->name_witness, true);
+
+        if (!is_array($witnessIds)) {
+            $witnessIds = $report->name_witness
+                ? [(int) $report->name_witness]
+                : [];
+        }
+
+        return view('incident_report.edit', compact(
+            'report',
+            'employees',
+            'involvedIds',
+            'witnessIds'
+        ));
     }
 
     /**
@@ -354,7 +506,74 @@ class IncidentReportController extends Controller
      */
     public function update(Request $request, $id)
     {
-        // Validation and update logic here
+        $report = IncidentReport::findOrFail($id);
+
+        if (!$this->canManageIncidentReport($report)) {
+            abort(403, 'You do not have permission to update this incident report.');
+        }
+
+        // Check permission.
+        $userAccess = Auth::user()->access['incident_report'] ?? null;
+        $userPermission = $userAccess['access'] ?? null;
+
+        $isReadOnly = $userPermission === '3' ||
+            (
+                preg_match("/R/i", $userPermission ?? '') &&
+                !preg_match("/C|U/i", $userPermission ?? '')
+            );
+
+        if ($isReadOnly) {
+            abort(403, 'You do not have permission to update incident reports.');
+        }
+
+        $validated = $request->validate([
+            'reported_by' => 'required|integer|exists:tbl_employee,id',
+            'position' => 'required|string|max:255',
+            'date_time_report' => 'required|date_format:Y-m-d\TH:i',
+            'incident_no' => 'nullable|string|max:255',
+            'incident_type' => 'required|string|max:255',
+            'date_incident' => 'required|date_format:Y-m-d\TH:i',
+            'location' => 'required|string|max:255',
+            'incident_description' => 'required|string',
+            'name_involved' => 'required|array|min:1',
+            'name_involved.*' => 'integer|exists:tbl_employee,id',
+            'name_witness' => 'nullable|array',
+            'name_witness.*' => 'integer|exists:tbl_employee,id',
+            'recommended_action' => 'required|string',
+        ]);
+
+        try {
+            // Keep the existing document number.
+            unset($validated['document_number']);
+
+            // Convert employee selections to JSON.
+            $validated['name_involved'] = !empty($validated['name_involved'])
+                ? json_encode(array_map('intval', $validated['name_involved']))
+                : null;
+
+            $validated['name_witness'] = !empty($validated['name_witness'])
+                ? json_encode(array_map('intval', $validated['name_witness']))
+                : null;
+
+            // Update the existing report.
+            $report->fill($validated);
+            $report->save();
+
+            return redirect()
+                ->route('incident-report.index')
+                ->with('success', 'Incident report updated successfully. Document No: ' . $report->document_number);
+
+        } catch (\Exception $e) {
+
+            \Log::error('Error updating incident report', [
+                'report_id' => $id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return back()
+                ->withInput()
+                ->with('error', 'Error updating incident report. Please try again.');
+        }
     }
 
     /**
