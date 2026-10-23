@@ -287,6 +287,15 @@
                                                         <button class="btn btn-sm btn-info" data-toggle="modal" data-target="#disciplinaryViewModal-{{ $note->id }}">
                                                             <i class="fas fa-eye"></i> View
                                                         </button>
+                                                        @if(!$isReadOnly && Auth::user()->role_id != 2)
+                                                            <button
+                                                                type="button"
+                                                                class="btn btn-sm btn-success"
+                                                                data-toggle="modal"
+                                                                data-target="#disciplinaryEditModal-{{ $note->id }}">
+                                                                <i class="fas fa-edit"></i> Edit
+                                                            </button>
+                                                        @endif
                                                         <a href="{{ route('incident-report.create', ['disciplinary_id' => $note->id, 'employee_id' => $note->employee_id]) }}" class="btn btn-sm btn-warning">
                                                             <i class="fas fa-plus"></i> Add IR
                                                         </a>
@@ -351,6 +360,221 @@
                                                       </div>
                                                     </div>
                                                   </div>
+                                                </div>
+
+                                                <!-- Edit Disciplinary Note Modal -->
+                                                <div class="modal fade"
+                                                    id="disciplinaryEditModal-{{ $note->id }}"
+                                                    tabindex="-1"
+                                                    role="dialog">
+
+                                                    <div class="modal-dialog modal-lg" role="document">
+
+                                                        <div class="modal-content">
+
+                                                            <div class="modal-header"
+                                                                style="background-color:#2f47ba;color:white;">
+
+                                                                <h5 class="modal-title">
+                                                                    Edit Disciplinary Note
+                                                                </h5>
+
+                                                                <button type="button"
+                                                                        class="close text-white"
+                                                                        data-dismiss="modal">
+                                                                    &times;
+                                                                </button>
+
+                                                            </div>
+
+                                                            <form
+                                                                action="{{ route('disciplinary.update', $note->id) }}"
+                                                                method="POST"
+                                                                enctype="multipart/form-data">
+
+                                                                @csrf
+                                                                @method('PUT')
+
+                                                                <div class="modal-body">
+
+                                                                    <!-- Employee -->
+                                                                    <div class="form-group">
+
+                                                                        <label>Employee</label>
+
+                                                                        <select
+                                                                            name="employee_id"
+                                                                            class="form-control select2-search"
+                                                                            required>
+
+                                                                            @foreach($employees as $employee)
+                                                                                <option
+                                                                                    value="{{ $employee->id }}"
+                                                                                    {{ $note->employee_id == $employee->id ? 'selected' : '' }}>
+
+                                                                                    {{ $employee->first_name }}
+                                                                                    {{ $employee->last_name }}
+
+                                                                                </option>
+                                                                            @endforeach
+
+                                                                        </select>
+
+                                                                    </div>
+
+                                                                    <!-- Case Details -->
+                                                                    <div class="form-group">
+
+                                                                        <label>Disciplinary Case</label>
+
+                                                                        <input
+                                                                            type="text"
+                                                                            name="case_details"
+                                                                            class="form-control"
+                                                                            value="{{ $note->case_details }}"
+                                                                            required>
+
+                                                                    </div>
+
+                                                                    <!-- Remarks -->
+                                                                    <div class="form-group">
+
+                                                                        <label>Remarks</label>
+
+                                                                        <textarea
+                                                                            name="remarks"
+                                                                            rows="4"
+                                                                            class="form-control"
+                                                                            required>{{ $note->remarks }}</textarea>
+
+                                                                    </div>
+
+                                                                    <!-- Date Served -->
+                                                                    <div class="form-group">
+
+                                                                        <label>Date Served</label>
+
+                                                                        <input
+                                                                            type="date"
+                                                                            name="date_served"
+                                                                            class="form-control"
+                                                                            value="{{ $note->date_served ? $note->date_served->format('Y-m-d') : '' }}"
+                                                                            required>
+
+                                                                    </div>
+
+                                                                    <!-- Sanction -->
+                                                                    <div class="form-group">
+
+                                                                        <label>Sanction</label>
+
+                                                                        <select name="sanction" class="form-control">
+
+                                                                            <option value="">Select Sanction</option>
+
+                                                                            @php
+                                                                                $sanctions = [
+                                                                                    '1st_reprimand' => '1st Reprimand',
+                                                                                    '2nd_reprimand' => '2nd Reprimand',
+                                                                                    '3rd_reprimand' => '3rd Reprimand',
+                                                                                    'final_reprimand' => 'Final Reprimand',
+                                                                                    '1day_suspension' => '1 Day Suspension',
+                                                                                    '3day_suspension' => '3 Day Suspension',
+                                                                                    '5day_suspension' => '5 Day Suspension',
+                                                                                    '7day_suspension' => '7 Day Suspension',
+                                                                                    '15day_suspension' => '15 Day Suspension',
+                                                                                    '30day_suspension' => '30 Day Suspension',
+                                                                                    '30day_preventive_suspension' => '30 Day Preventive Suspension',
+                                                                                    'end_of_contract' => 'End of Contract (OEC)',
+                                                                                    'salary_deduction' => 'Settlement through Salary Deduction',
+                                                                                    'termination' => 'For Termination',
+                                                                                ];
+                                                                            @endphp
+
+                                                                            @foreach($sanctions as $value => $label)
+
+                                                                                <option
+                                                                                    value="{{ $value }}"
+                                                                                    {{ $note->sanction == $value ? 'selected' : '' }}>
+
+                                                                                    {{ $label }}
+
+                                                                                </option>
+
+                                                                            @endforeach
+
+                                                                        </select>
+
+                                                                    </div>
+
+                                                                    <!-- Existing Attachment -->
+                                                                    @if($note->attachment_path)
+
+                                                                        <div class="form-group">
+
+                                                                            <label>Current Attachment</label>
+
+                                                                            <div>
+                                                                                <a
+                                                                                    href="{{ asset($note->attachment_path) }}"
+                                                                                    target="_blank"
+                                                                                    class="btn btn-sm btn-outline-success">
+
+                                                                                    <i class="fas fa-download"></i>
+                                                                                    View Current Attachment
+
+                                                                                </a>
+                                                                            </div>
+
+                                                                        </div>
+
+                                                                    @endif
+
+                                                                    <!-- New Attachment -->
+                                                                    <div class="form-group">
+
+                                                                        <label>Replace Attachment (Optional)</label>
+
+                                                                        <input
+                                                                            type="file"
+                                                                            name="attachment"
+                                                                            class="form-control-file">
+
+                                                                        <small class="text-muted">
+                                                                            Leave empty to retain the existing attachment.
+                                                                            Maximum file size: 10MB.
+                                                                        </small>
+
+                                                                    </div>
+
+                                                                </div>
+
+                                                                <div class="modal-footer">
+
+                                                                    <button
+                                                                        type="button"
+                                                                        class="btn btn-secondary"
+                                                                        data-dismiss="modal">
+                                                                        Cancel
+                                                                    </button>
+
+                                                                    <button
+                                                                        type="submit"
+                                                                        class="btn btn-success">
+
+                                                                        <i class="fas fa-save"></i>
+                                                                        Update Disciplinary Note
+
+                                                                    </button>
+
+                                                                </div>
+
+                                                            </form>
+
+                                                        </div>
+
+                                                    </div>
+
                                                 </div>
 
                                                 <!-- Delete Modal for Admin -->

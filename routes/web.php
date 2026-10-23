@@ -289,6 +289,7 @@ Route::get('employees_management', [employeeController::class, 'employees_manage
    Route::post('disciplinary/store', [DisciplinaryController::class, 'store'])->middleware(['auth'])->name('disciplinary.store');
    Route::delete('disciplinary/{id}', [DisciplinaryController::class, 'delete'])->middleware(['auth'])->name('disciplinary.delete');
    Route::post('disciplinary/export', [DisciplinaryController::class, 'export'])->middleware(['auth'])->name('disciplinary.export');
+   Route::put('disciplinary/{id}/update', [DisciplinaryController::class,'update'])->middleware(['auth'])->name('disciplinary.update');
    //Accountabilities
    // Route::post('add_accountabilities_permission', [EmployeeBankController::class, 'addAccountabilitiesPermission'])->middleware(['auth'])->name('add_accountabilities_permission');
 // Route::post('remove_accountabilities_permission', [EmployeeBankController::class, 'removeAccountabilitiesPermission'])->middleware(['auth'])->name('remove_accountabilities_permission');

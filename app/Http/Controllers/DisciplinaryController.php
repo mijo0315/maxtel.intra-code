@@ -364,4 +364,90 @@ class DisciplinaryController extends Controller
             return back()->with('error', 'Error exporting disciplinary notes: ' . $e->getMessage());
         }
     }
+
+    public function update(Request $request, $id)
+    {
+        // Prevent read-only users from updating notes.
+        $userAccess = Auth::user()->access['disciplinary_management'] ?? null;
+        $userPermission = $userAccess['access'] ?? null;
+
+        $isReadOnly = $userPermission === '3' ||
+            (preg_match("/R/i", $userPermission ?? '') &&
+            !preg_match("/C|U/i", $userPermission ?? ''));
+
+        if ($isReadOnly || Auth::user()->role_id == 2) {
+            return back()->with('error', 'Unauthorized action.');
+        }
+
+        $disciplinaryNote = DisciplinaryNote::whereNull('parent_id')
+            ->findOrFail($id);
+
+        $request->validate([
+            'employee_id' => 'required|exists:tbl_employee,id',
+            'case_details' => 'required|string|max:255',
+            'remarks' => 'required|string',
+            'date_served' => 'required|date',
+            'sanction' => 'nullable|string',
+            'attachment' => 'nullable|file|max:10240',
+        ]);
+
+        try {
+            $disciplinaryNote->employee_id = $request->employee_id;
+            $disciplinaryNote->case_details = $request->case_details;
+            $disciplinaryNote->remarks = $request->remarks;
+            $disciplinaryNote->date_served = date(
+                'Y-m-d',
+                strtotime($request->date_served)
+            );
+            $disciplinaryNote->sanction = $request->sanction;
+
+            // Replace attachment only when a new file is uploaded.
+            if ($request->hasFile('attachment')) {
+                $file = $request->file('attachment');
+
+                $fileName = time() . '_' . $file->getClientOriginalName();
+
+                if (env('APP_ENV') === 'local') {
+                    $storagePath = 'uploads/disciplinary/';
+
+                    if (!file_exists(public_path($storagePath))) {
+                        mkdir(public_path($storagePath), 0755, true);
+                    }
+
+                    $file->move(public_path($storagePath), $fileName);
+
+                    $newAttachmentPath = $storagePath . $fileName;
+                } else {
+                    $storagePath = 'public/uploads/disciplinary/';
+
+                    $file->move($storagePath, $fileName);
+
+                    $newAttachmentPath = 'uploads/disciplinary/' . $fileName;
+                }
+
+                // Remove old attachment after successful upload.
+                if (
+                    $disciplinaryNote->attachment_path &&
+                    file_exists(public_path($disciplinaryNote->attachment_path))
+                ) {
+                    @unlink(public_path($disciplinaryNote->attachment_path));
+                }
+
+                $disciplinaryNote->attachment_path = $newAttachmentPath;
+            }
+
+            $disciplinaryNote->save();
+
+            return redirect()
+                ->route('disciplinary')
+                ->with('success', 'Disciplinary note updated successfully.');
+
+        } catch (\Exception $e) {
+            Log::error('Error updating disciplinary note: ' . $e->getMessage());
+
+            return back()
+                ->with('error', 'Error updating disciplinary note: ' . $e->getMessage())
+                ->withInput();
+        }
+    }
 }
