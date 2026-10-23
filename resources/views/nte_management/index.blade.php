@@ -25,6 +25,21 @@
 		background-color: #2f47ba;
 		color: white;
 	}
+	.nte-pagination {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 10px;
+	}
+
+	.nte-pagination .pagination {
+		margin-bottom: 0;
+	}
+
+	.nte-pagination .pagination-info {
+		font-size: 14px;
+	}
 </style>
 @endsection
 
@@ -182,6 +197,53 @@
 						</div>
 					</div>
 					<div class="card-body">
+						<div class="row mb-3">
+
+							<div class="col-md-6">
+
+								<form action="{{ url()->current() }}" method="GET">
+
+									<div class="input-group">
+
+										<input
+											type="text"
+											name="search"
+											class="form-control"
+											placeholder="Search document, employee, case or remarks..."
+											value="{{ $search ?? '' }}">
+
+										<div class="input-group-append">
+
+											<button type="submit" class="btn btn-success">
+												<i class="fas fa-search"></i> Search
+											</button>
+
+											@if($search)
+												<a href="{{ url()->current() }}"
+												class="btn btn-secondary">
+													<i class="fas fa-times"></i> Clear
+												</a>
+											@endif
+
+										</div>
+
+									</div>
+
+								</form>
+
+							</div>
+
+							<div class="col-md-6 text-right">
+
+								<span class="text-muted">
+									Showing {{ $nteNotes->firstItem() ?? 0 }}
+									to {{ $nteNotes->lastItem() ?? 0 }}
+									of {{ $nteNotes->total() }} records
+								</span>
+
+							</div>
+
+						</div>
 						<div class="table-responsive">
 							<table class="table table-striped">
 								<thead>
@@ -196,7 +258,7 @@
 										<th style="width: 10%;">Actions</th>
 									</tr>
 								</thead>
-						<tbody>
+							<tbody>
 							@forelse($nteNotes as $note)
 							<tr>
 								<td>
@@ -216,23 +278,56 @@
 									<button class="btn btn-sm btn-info" data-toggle="modal" data-target="#nteViewModal-{{ $note->id }}">
 										<i class="fas fa-eye"></i> View @if($note->replies && $note->replies->count() > 0)({{ $note->replies->count() }})@endif
 									</button>
-									@if(Auth::user()->role_id != 1 && Auth::user()->role_id != 27)
-										<button class="btn btn-sm btn-success" data-toggle="modal" data-target="#nteReplyModalTable-{{ $note->id }}">Reply</button>
-							@else
-								<button class="btn btn-sm btn-warning" data-toggle="modal" data-target="#nteEditModal-{{ $note->id }}" title="Edit NTE">
-									<i class="fas fa-edit"></i>
-								</button>
-								<button class="btn btn-sm btn-success" data-toggle="modal" data-target="#createDRModal-{{ $note->id }}" title="Create Disciplinary Report">
-									<i class="fas fa-file-alt"></i> Create DR
-								</button>
-								<button class="btn btn-sm btn-danger" data-toggle="modal" data-target="#nteDeleteModal-{{ $note->id }}">
-									<i class="fas fa-trash"></i> Delete
-								</button>
-							@endif
+									@php
+										$nteManageRoles = [1, 4, 5, 27, 14, 15];
+										$canManageNte = in_array((int) Auth::user()->role_id, $nteManageRoles);
+									@endphp
+
+									@if($canManageNte)
+
+										<button class="btn btn-sm btn-warning"
+												data-toggle="modal"
+												data-target="#nteEditModal-{{ $note->id }}"
+												title="Edit NTE">
+											<i class="fas fa-edit"></i> Edit
+										</button>
+
+										<button class="btn btn-sm btn-success"
+												data-toggle="modal"
+												data-target="#createDRModal-{{ $note->id }}"
+												title="Create Disciplinary Report">
+											<i class="fas fa-file-alt"></i> Create DR
+										</button>
+
+										<button class="btn btn-sm btn-danger"
+												data-toggle="modal"
+												data-target="#nteDeleteModal-{{ $note->id }}"
+												title="Delete NTE">
+											<i class="fas fa-trash"></i> Delete
+										</button>
+
+									@else
+
+										<button class="btn btn-sm btn-success"
+												data-toggle="modal"
+												data-target="#nteReplyModalTable-{{ $note->id }}">
+											Reply
+										</button>
+
+									@endif
 						</td>
 						</tr>
 
-						@if(Auth::user()->role_id != 1 && Auth::user()->role_id != 27)
+						@php
+							$nteManageRoles = [1, 4, 5, 27, 14, 15];
+
+							$canManageNte = in_array(
+								(int) Auth::user()->role_id,
+								$nteManageRoles
+							);
+						@endphp
+
+						@if(!$canManageNte)
 					
 						<!-- View Modal -->
 						<div class="modal fade" id="nteViewModal-{{ $note->id }}" tabindex="-1" role="dialog">
@@ -415,105 +510,107 @@
 						  </div>
 						</div>
 
-						<!-- Edit Modal for Admin -->
+						@if(in_array((int) Auth::user()->role_id, [1, 4, 5, 27, 14, 15]))
+							<!-- Edit Modal for Admin -->
 						<div class="modal fade" id="nteEditModal-{{ $note->id }}" tabindex="-1" role="dialog">
-						  <div class="modal-dialog modal-lg" role="document">
-							<div class="modal-content">
-							  <div class="modal-header" style="background-color:#2f47ba;color:white;">
-								<h5 class="modal-title">Edit NTE</h5>
-								<button type="button" class="close text-white" data-dismiss="modal">&times;</button>
-							  </div>
-							  <form action="{{ route('nte.update', $note->id) }}" method="POST" enctype="multipart/form-data">
-							  @csrf
-							  @method('PUT')
-							  <div class="modal-body">
-								<!-- Employee (Read-only) -->
-								<div class="form-group">
-									<label>Employee Name</label>
-									<input type="text" class="form-control" value="{{ $note->employee ? $note->employee->first_name . ' ' . $note->employee->last_name : 'N/A' }}" readonly>
+							<div class="modal-dialog modal-lg" role="document">
+								<div class="modal-content">
+								<div class="modal-header" style="background-color:#2f47ba;color:white;">
+									<h5 class="modal-title">Edit NTE</h5>
+									<button type="button" class="close text-white" data-dismiss="modal">&times;</button>
 								</div>
+								<form action="{{ route('nte.update', $note->id) }}" method="POST" enctype="multipart/form-data">
+								@csrf
+								@method('PUT')
+								<div class="modal-body">
+									<!-- Employee (Read-only) -->
+									<div class="form-group">
+										<label>Employee Name</label>
+										<input type="text" class="form-control" value="{{ $note->employee ? $note->employee->first_name . ' ' . $note->employee->last_name : 'N/A' }}" readonly>
+									</div>
 
-								<!-- Case Details -->
-								<div class="form-group">
-									<label>Case Details <span class="text-danger">*</span></label>
-									<input type="text" name="case_details" class="form-control" value="{{ $note->case_details }}" required>
-								</div>
+									<!-- Case Details -->
+									<div class="form-group">
+										<label>Case Details <span class="text-danger">*</span></label>
+										<input type="text" name="case_details" class="form-control" value="{{ $note->case_details }}" required>
+									</div>
 
-								<!-- Remarks -->
-								<div class="form-group">
-									<label>Remarks <span class="text-danger">*</span></label>
-									<textarea name="remarks" class="form-control" rows="3" required>{{ $note->remarks }}</textarea>
-								</div>
+									<!-- Remarks -->
+									<div class="form-group">
+										<label>Remarks <span class="text-danger">*</span></label>
+										<textarea name="remarks" class="form-control" rows="3" required>{{ $note->remarks }}</textarea>
+									</div>
 
-								<!-- Date Served -->
-								<div class="form-group">
-									<label>Date Served <span class="text-danger">*</span></label>
-									<input type="date" name="date_served" class="form-control" value="{{ $note->date_served->format('Y-m-d') }}" required>
-								</div>
+									<!-- Date Served -->
+									<div class="form-group">
+										<label>Date Served <span class="text-danger">*</span></label>
+										<input type="date" name="date_served" class="form-control" value="{{ $note->date_served->format('Y-m-d') }}" required>
+									</div>
 
-								<!-- Due Date -->
-								<div class="form-group">
-									<label>Due Date for Submission</label>
-									<input type="date" name="due_date" class="form-control" value="{{ $note->due_date ? $note->due_date->format('Y-m-d') : '' }}">
-								</div>
+									<!-- Due Date -->
+									<div class="form-group">
+										<label>Due Date for Submission</label>
+										<input type="date" name="due_date" class="form-control" value="{{ $note->due_date ? $note->due_date->format('Y-m-d') : '' }}">
+									</div>
 
-								<!-- Resolution -->
-								<div class="form-group">
-									<label>Resolution</label>
-									<textarea name="resolution" class="form-control" rows="3">{{ $note->resolution ?? '' }}</textarea>
-								</div>
+									<!-- Resolution -->
+									<div class="form-group">
+										<label>Resolution</label>
+										<textarea name="resolution" class="form-control" rows="3">{{ $note->resolution ?? '' }}</textarea>
+									</div>
 
-								<!-- Attachment -->
-								<div class="form-group">
-									<label>Attachment</label>
-									@if($note->attachment_path)
-										<div class="mb-2">
-											<a href="{{ asset_with_env($note->attachment_path) }}" target="_blank" class="btn btn-sm btn-outline-primary">
-												<i class="fas fa-download"></i> Current Attachment
-											</a>
-										</div>
-									@endif
-									<input type="file" name="attachment" class="form-control-file">
-									<small class="form-text text-muted">Leave empty to keep current attachment</small>
+									<!-- Attachment -->
+									<div class="form-group">
+										<label>Attachment</label>
+										@if($note->attachment_path)
+											<div class="mb-2">
+												<a href="{{ asset_with_env($note->attachment_path) }}" target="_blank" class="btn btn-sm btn-outline-primary">
+													<i class="fas fa-download"></i> Current Attachment
+												</a>
+											</div>
+										@endif
+										<input type="file" name="attachment" class="form-control-file">
+										<small class="form-text text-muted">Leave empty to keep current attachment</small>
+									</div>
 								</div>
-							  </div>
-							  <div class="modal-footer">
-								<button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-								<button type="submit" class="btn btn-success">Update NTE</button>
-							  </div>
-							  </form>
+								<div class="modal-footer">
+									<button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+									<button type="submit" class="btn btn-success">Update NTE</button>
+								</div>
+								</form>
+								</div>
 							</div>
-						  </div>
 						</div>
 
-						<!-- Delete Modal for Admin -->
+							<!-- Delete Modal for Admin -->
 						<div class="modal fade" id="nteDeleteModal-{{ $note->id }}" tabindex="-1" role="dialog">
-						  <div class="modal-dialog" role="document">
-							<div class="modal-content">
-							  <div class="modal-header bg-danger text-white">
-								<h5 class="modal-title">Confirm Delete</h5>
-								<button type="button" class="close text-white" data-dismiss="modal">&times;</button>
-							  </div>
-							  <form action="{{ route('nte.delete', $note->id) }}" method="POST">
-							  @csrf
-							  @method('DELETE')
-							  <div class="modal-body">
-								<p>Are you sure you want to delete this NTE?</p>
-								<div class="alert alert-warning">
-									<strong>Employee:</strong> {{ $note->employee ? $note->employee->first_name . ' ' . $note->employee->last_name : 'N/A' }}<br>
-									<strong>Case:</strong> {{ Str::limit($note->case_details, 50) }}<br>
-									<strong>Date:</strong> {{ $note->date_served->format('M d, Y') }}
+							<div class="modal-dialog" role="document">
+								<div class="modal-content">
+								<div class="modal-header bg-danger text-white">
+									<h5 class="modal-title">Confirm Delete</h5>
+									<button type="button" class="close text-white" data-dismiss="modal">&times;</button>
 								</div>
-								<p class="text-danger"><strong>Warning:</strong> This action cannot be undone. All replies to this NTE will also be deleted.</p>
-							  </div>
-							  <div class="modal-footer">
-								<button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-								<button type="submit" class="btn btn-danger">Delete NTE</button>
-							  </div>
-							  </form>
+								<form action="{{ route('nte.delete', $note->id) }}" method="POST">
+								@csrf
+								@method('DELETE')
+								<div class="modal-body">
+									<p>Are you sure you want to delete this NTE?</p>
+									<div class="alert alert-warning">
+										<strong>Employee:</strong> {{ $note->employee ? $note->employee->first_name . ' ' . $note->employee->last_name : 'N/A' }}<br>
+										<strong>Case:</strong> {{ Str::limit($note->case_details, 50) }}<br>
+										<strong>Date:</strong> {{ $note->date_served->format('M d, Y') }}
+									</div>
+									<p class="text-danger"><strong>Warning:</strong> This action cannot be undone. All replies to this NTE will also be deleted.</p>
+								</div>
+								<div class="modal-footer">
+									<button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+									<button type="submit" class="btn btn-danger">Delete NTE</button>
+								</div>
+								</form>
+								</div>
 							</div>
-						  </div>
 						</div>
+						@endif
 
 						<!-- Create Disciplinary Report Modal -->
 						<div class="modal fade" id="createDRModal-{{ $note->id }}" tabindex="-1" role="dialog">
@@ -596,6 +693,20 @@
 						@endforelse
 					</tbody>
 				</table>
+				</div>
+				<!-- Pagination -->
+				<div class="nte-pagination mt-4">
+
+					<div class="pagination-info text-muted">
+						Showing {{ $nteNotes->firstItem() ?? 0 }}
+						to {{ $nteNotes->lastItem() ?? 0 }}
+						of {{ $nteNotes->total() }} results
+					</div>
+
+					<div class="pagination-links">
+						{{ $nteNotes->appends(request()->query())->links('pagination::bootstrap-4') }}
+					</div>
+
 				</div>
 			</div>
 				</div>

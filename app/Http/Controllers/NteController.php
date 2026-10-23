@@ -14,84 +14,168 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class NteController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         try {
             // Get user permission for this page
             $routeName = 'nte_management';
             $userAccess = Auth::user()->access[$routeName] ?? null;
             $userPermission = $userAccess['access'] ?? null;
-            
-            // Check if user has read-only permission (value 3 = "R" only)
-            $isReadOnly = $userPermission === '3' || (preg_match("/R/i", $userPermission ?? '') && !preg_match("/C|U/i", $userPermission ?? ''));
-            
-            // Check if user can create NTE (role_id 2 cannot create)
+
+            // Check if user has read-only permission
+            $isReadOnly = $userPermission === '3' ||
+                (
+                    preg_match("/R/i", $userPermission ?? '') &&
+                    !preg_match("/C|U/i", $userPermission ?? '')
+                );
+
+            // Check if user can create NTE
             $canCreateNte = auth()->user()->role_id != 2;
-            
-            // Get current employee
+
+            // Get current employee and role
             $employee = Employee::where('user_id', auth()->id())->first();
             $role_id = auth()->user()->role_id;
-            
-            // Determine which employees to display for creation and which notes to show
+
+            // Search input
+            $search = trim($request->input('search', ''));
+
+            // Base query: only parent NTE records
+            $nteNotesQuery = NteNote::with([
+                'employee',
+                'replies.employee'
+            ])->whereNull('parent_id');
+
+            // Determine which employees to display and which notes to show
             $employees = [];
-            $nteNotesQuery = NteNote::with(['employee', 'replies.employee'])->whereNull('parent_id');
-            
+
             if ($canCreateNte && !$isReadOnly) {
-                $role_id_all = [1,4,5,27]; //all access
-                if (in_array($role_id,$role_id_all)) {
-                    // Admin and role_id 27 see all employees and all notes
+
+                $role_id_all = [1, 4, 5, 27];
+
+                if (in_array($role_id, $role_id_all)) {
+
+                    // Admin and all-access roles
                     $employees = Employee::all();
-                    $nteNotes = $nteNotesQuery->latest()->get();
+
                 } else {
-                    // HR managers see employees in their assigned groups
+
+                    // HR managers: employees in their assigned groups
                     $assignedGroups = [];
                     $query = Employee::query();
-                    
-                    // if ($role_id === 4) { // HR Group D
-                    //     $assignedGroups = ["group_d"];
-                    //     $query->where(function ($q) {
-                    //         // $q->where("hr_group", "group_d")
-                    //         // ->orWhere("user_id", Auth::user()->id);
-                    //     });
-                    // } elseif ($role_id === 5) { // HR Group B,C,E
-                    //     $assignedGroups = ["group_b", "group_c", "group_e"];
-                    //     $query->where(function ($q) {
-                    //         // $q->whereIn("hr_group", ["group_b","group_c","group_e"])
-                    //         // ->orWhere("user_id", Auth::user()->id);
-                    //     });
-                    // } else
-                    if ($role_id === 14) { // HR Group B,C
-                        $assignedGroups = ["group_b", "group_c"];
+
+                    if ($role_id === 14) {
+
+                        $assignedGroups = ['group_b', 'group_c'];
+
                         $query->where(function ($q) {
-                            $q->whereIn("hr_group", ["group_b","group_c"])
-                            ->orWhere("user_id", Auth::user()->id);
+                            $q->whereIn('hr_group', ['group_b', 'group_c'])
+                            ->orWhere('user_id', Auth::user()->id);
                         });
-                    } elseif ($role_id === 15) { // HR Group C,E
-                        $assignedGroups = ["group_c", "group_e"];
+
+                    } elseif ($role_id === 15) {
+
+                        $assignedGroups = ['group_c', 'group_e'];
+
                         $query->where(function ($q) {
-                            $q->whereIn("hr_group", ["group_c","group_e"])
-                            ->orWhere("user_id", Auth::user()->id);
+                            $q->whereIn('hr_group', ['group_c', 'group_e'])
+                            ->orWhere('user_id', Auth::user()->id);
                         });
                     }
-                    
+
                     $employees = $query->where('is_active', 1)->get();
-                    
-                    // Filter NTE notes to only show those for employees in assigned groups
-                    $nteNotes = $nteNotesQuery->whereHas('employee', function ($q) use ($assignedGroups) {
-                        $q->whereIn("hr_group", $assignedGroups);
-                    })->orWhereHas('employee', function ($q) {
-                        $q->where("user_id", Auth::user()->id);
-                    })->latest()->get();
+
                 }
+
             } else {
-                // Staff (role_id 2) or read-only users see only their own notes
+
+                // Staff or read-only users
                 $employees = [];
-                $nteNotes = $employee ? NteNote::where('employee_id', $employee->id)->whereNull('parent_id')->with(['employee', 'replies.employee'])->latest()->get() : collect([]);
             }
-            
-            return view('nte_management.index', compact('employees', 'nteNotes', 'isReadOnly', 'canCreateNte'));
+
+            // Apply NTE visibility restrictions
+            if ($canCreateNte && !$isReadOnly) {
+
+                $role_id_all = [1, 4, 5, 27];
+
+                if (in_array($role_id, $role_id_all)) {
+
+                    // All-access roles see all parent NTE notes
+
+                } else {
+
+                    // HR managers see notes for their assigned groups
+                    $assignedGroups = [];
+
+                    if ($role_id === 14) {
+                        $assignedGroups = ['group_b', 'group_c'];
+                    } elseif ($role_id === 15) {
+                        $assignedGroups = ['group_c', 'group_e'];
+                    }
+
+                    $nteNotesQuery->where(function ($q) use ($assignedGroups) {
+
+                        $q->whereHas('employee', function ($employeeQuery) use ($assignedGroups) {
+                            $employeeQuery->whereIn('hr_group', $assignedGroups);
+                        })
+                        ->orWhereHas('employee', function ($employeeQuery) {
+                            $employeeQuery->where('user_id', Auth::user()->id);
+                        });
+
+                    });
+
+                }
+
+            } else {
+
+                // Staff and read-only users see only their own notes
+                if ($employee) {
+                    $nteNotesQuery->where('employee_id', $employee->id);
+                } else {
+                    $nteNotesQuery->whereRaw('1 = 0');
+                }
+
+            }
+
+            // Apply search AFTER the role-based visibility restrictions
+            if ($search !== '') {
+
+                $nteNotesQuery->where(function ($q) use ($search) {
+
+                    $q->where('document_number', 'LIKE', "%{$search}%")
+                    ->orWhere('case_details', 'LIKE', "%{$search}%")
+                    ->orWhere('remarks', 'LIKE', "%{$search}%")
+                    ->orWhereHas('employee', function ($employeeQuery) use ($search) {
+
+                        $employeeQuery->where('first_name', 'LIKE', "%{$search}%")
+                            ->orWhere('last_name', 'LIKE', "%{$search}%")
+                            ->orWhere('emp_code', 'LIKE', "%{$search}%");
+
+                    });
+
+                });
+
+            }
+
+            // Pagination: 15 records per page
+            $nteNotes = $nteNotesQuery
+                ->latest()
+                ->paginate(15)
+                ->withQueryString();
+
+            return view('nte_management.index', compact(
+                'employees',
+                'nteNotes',
+                'isReadOnly',
+                'canCreateNte',
+                'search'
+            ));
+
         } catch (\Throwable $e) {
-            \Log::error('NTE index render error: '.$e->getMessage(), ['exception' => $e]);
+
+            \Log::error('NTE index render error: ' . $e->getMessage(), [
+                'exception' => $e
+            ]);
+
             return response('Server error rendering NTE page', 500);
         }
     }
@@ -217,8 +301,10 @@ class NteController extends Controller
     public function update(Request $request, $id)
     {
         // Only admins can update
-        if (auth()->user()->role_id != 1) {
-            return back()->with('error', 'Unauthorized action.');
+        $allowedRoles = [1, 4, 5, 27, 14, 15];
+
+        if (!in_array((int) auth()->user()->role_id, $allowedRoles)) {
+            abort(403, 'You are not authorized to update NTE records.');
         }
 
         $request->validate([
@@ -267,8 +353,10 @@ class NteController extends Controller
     {
         try {
             // Only admins can delete
-            if (auth()->user()->role_id != 1) {
-                return back()->with('error', 'Unauthorized action.');
+            $allowedRoles = [1, 4, 5, 27, 14, 15];
+
+            if (!in_array((int) auth()->user()->role_id, $allowedRoles)) {
+                abort(403, 'You are not authorized to delete NTE records.');
             }
 
             $nte = NteNote::findOrFail($id);
