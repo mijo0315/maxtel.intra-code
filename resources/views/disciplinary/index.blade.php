@@ -5,6 +5,51 @@
 
 @section('styles')
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+    .disciplinary-pagination {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 15px;
+        width: 100%;
+    }
+
+    .disciplinary-pagination .pagination {
+        margin-bottom: 0;
+        flex-wrap: wrap;
+    }
+
+    .disciplinary-pagination .page-link {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 40px;
+        min-height: 36px;
+    }
+
+    .disciplinary-pagination svg {
+        width: 16px !important;
+        height: 16px !important;
+        max-width: 16px;
+        max-height: 16px;
+    }
+
+    .disciplinary-pagination nav {
+        max-width: 100%;
+    }
+
+    @media (max-width: 768px) {
+        .disciplinary-pagination {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .disciplinary-pagination .pagination {
+            flex-wrap: wrap;
+        }
+    }
+</style>
 @endsection
 
 @section('content')
@@ -347,13 +392,18 @@
                                     </table>
                                     
                                     <!-- Pagination -->
-                                    <div class="d-flex justify-content-between align-items-center mt-4">
-                                        <div class="text-muted">
-                                            Showing {{ $disciplinaryNotes->firstItem() ?? 0 }} to {{ $disciplinaryNotes->lastItem() ?? 0 }} of {{ $disciplinaryNotes->total() }} results
+                                    <div class="disciplinary-pagination mt-4">
+
+                                        <div class="pagination-info text-muted">
+                                            Showing {{ $disciplinaryNotes->firstItem() ?? 0 }}
+                                            to {{ $disciplinaryNotes->lastItem() ?? 0 }}
+                                            of {{ $disciplinaryNotes->total() }} results
                                         </div>
-                                        <nav>
-                                            {{ $disciplinaryNotes->appends(request()->query())->links() }}
-                                        </nav>
+
+                                        <div class="pagination-links">
+                                            {{ $disciplinaryNotes->appends(request()->query())->links('pagination::bootstrap-4') }}
+                                        </div>
+
                                     </div>
                                 </div>
                             </div>
