@@ -235,7 +235,14 @@ class DisciplinaryController extends Controller
     {
         try {
             // Only admins can delete
-            if (auth()->user()->role_id != 1) {
+            $userAccess = Auth::user()->access['disciplinary_management'] ?? null;
+            $userPermission = $userAccess['access'] ?? null;
+
+            $isReadOnly = $userPermission === '3' ||
+                (preg_match("/R/i", $userPermission ?? '') &&
+                !preg_match("/C|U/i", $userPermission ?? ''));
+
+            if ($isReadOnly || Auth::user()->role_id == 2) {
                 return back()->with('error', 'Unauthorized action.');
             }
 

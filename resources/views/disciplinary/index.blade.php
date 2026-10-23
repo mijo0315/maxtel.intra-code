@@ -299,11 +299,11 @@
                                                         <a href="{{ route('incident-report.create', ['disciplinary_id' => $note->id, 'employee_id' => $note->employee_id]) }}" class="btn btn-sm btn-warning">
                                                             <i class="fas fa-plus"></i> Add IR
                                                         </a>
-                                                        <!-- @if(Auth::user()->role_id == 1)
+                                                        @if(!$isReadOnly && Auth::user()->role_id != 2)
                                                             <button class="btn btn-sm btn-danger" data-toggle="modal" data-target="#disciplinaryDeleteModal-{{ $note->id }}">
                                                                 <i class="fas fa-trash"></i> Delete
                                                             </button>
-                                                        @endif -->
+                                                        @endif
                                                     </td>
                                                 </tr>
 
@@ -578,7 +578,7 @@
                                                 </div>
 
                                                 <!-- Delete Modal for Admin -->
-                                                @if(Auth::user()->role_id == 1)
+                                                @if(!$isReadOnly && Auth::user()->role_id != 2)
                                                 <div class="modal fade" id="disciplinaryDeleteModal-{{ $note->id }}" tabindex="-1" role="dialog">
                                                   <div class="modal-dialog" role="document">
                                                     <div class="modal-content">
