@@ -23,13 +23,11 @@ class facetimeauditController extends Controller
         if(Auth::user()->access["face_and_time_audit"]["user_type"] != "employee"){
 
             if ($role_id === 4) { // HR Group D
-                // $tbl_employee = $tbl_employee->where("hr_group", "group_a");
                 $tbl_employee = $tbl_employee->where(function ($q) {
                     $q->where("hr_group", "group_d")
                       ->orWhere("user_id", Auth::user()->id); 
                 });
             } elseif ($role_id === 5) { // HR Group B,C,E
-                // $tbl_employee = $tbl_employee->where("hr_group", "group_b");
                 $tbl_employee = $tbl_employee->where(function ($q) {
                     $q->whereIn("hr_group", ["group_b","group_c","group_e"])
                       ->orWhere("user_id", Auth::user()->id);
@@ -45,17 +43,15 @@ class facetimeauditController extends Controller
                       ->orWhere("user_id", Auth::user()->id);
                 });
             } 
-            // elseif ($role_id === 22) { // HR Group E
-            //     $tbl_employee = $tbl_employee->where(function ($q) {
-            //         $q->where("hr_group", "group_e")
-            //           ->orWhere("user_id", Auth::user()->id);
-            //     });
-            // }
-
-       
         }else{
-             $tbl_employee = $tbl_employee->where("id",Auth::user()->company["linked_employee"]["id"]);
-
+            if ($role_id === 6) { // HR Group D under Joefran Dumandan
+                $tbl_employee = $tbl_employee->where(function ($q) {
+                    $q->where("hr_group", "group_d")
+                      ->orWhere("user_id", Auth::user()->id); 
+                });
+            }else{
+                $tbl_employee = $tbl_employee->where("id",Auth::user()->company["linked_employee"]["id"]);
+            }
         }
         
         $tbl_employee = $tbl_employee->orderBy("last_name","asc")->get();
