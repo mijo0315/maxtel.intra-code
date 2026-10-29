@@ -12,6 +12,7 @@ use DatePeriod;
 use Carbon\Carbon; //OT ALL
 use Illuminate\Support\Str;
 use Maatwebsite\Excel\Facades\Excel;
+use Illuminate\Support\Facades\Log;
 
 class payrollController extends Controller
 {
@@ -2085,11 +2086,16 @@ class payrollController extends Controller
         $weekCount = ceil($totalDays / 7);
         return $weekCount;
     }
-    private function payroll_process_13thmonth($employee_list,$request,$data,$tbl_employee){
+    private function payroll_process_13thmonth($employee_list, $request, $data, $tbl_employee)
+    {
         $payroll_income = array();
-        foreach($employee_list as $emp){
-            $emp_info = str_replace("|", "",$emp);
+
+        foreach ($employee_list as $emp) {
+
+            $emp_info = str_replace("|", "", $emp);
+
             $emp_check = $this->search_multi_array($tbl_employee, "id", $emp_info);
+
             $emp_rate = $emp_check["salary_rate"];
             $emp_rate_type = $emp_check["salary_type"];
             $emp_mwe = $emp_check["is_mwe"];
@@ -2102,36 +2108,61 @@ class payrollController extends Controller
             $fix_philhealth = $emp_check["fix_philhealth"];
             $fix_hdmf = $emp_check["fix_hdmf"];
             $fix_tax_rate = $emp_check["fix_tax_rate"];
-            
-            //GET ALL POSSIBLE BP on target range
-            $startDate = new DateTime($data->cover_from);
-            $endDate = new DateTime($data->cover_to);
-          
-            
-            $payroll_id = DB::connection("intra_payroll")->table("tbl_payroll")
-                ->select("id")
+
+            // GET ALL RP PAYROLLS WITHIN THE TARGET RANGE
+            $startDate = $data->cover_from;
+            $endDate   = $data->cover_to;
+
+            $payroll_ids = DB::connection("intra_payroll")
+                ->table("tbl_payroll")
                 ->where("process_type", "RP")
-                ->whereRaw("STR_TO_DATE('APR-01-2023', '%b-%d-%Y') between '".$data->cover_from."' and '".$data->cover_to."'")
-                ->where("payroll_status", "CLOSE")
-                ->get();
-            
-            $payroll_ids = json_decode(json_encode($payroll_id), true);
-            $basic_pays =  DB::connection("intra_payroll")->table("tbl_payroll_income")
+                ->whereIn("payroll_status", ["CLOSE", "COMPUTED"])
+                ->whereDate("cover_from", ">=", $startDate)
+                ->whereDate("cover_to", "<=", $endDate)
+                ->pluck("id")
+                ->toArray();
+
+            // GET ALL BASIC PAY
+            $basic_pays = DB::connection("intra_payroll")
+                ->table("tbl_payroll_income")
                 ->whereIn("payroll_id", $payroll_ids)
-                ->where("emp_id",$emp_info)
+                ->where("emp_id", $emp_info)
                 ->where("type", "BP")
                 ->sum("amount");
-            
-            $tardi =  DB::connection("intra_payroll")->table("tbl_payroll_deduction")
-            ->whereIn("payroll_id", $payroll_ids)
-            ->where("emp_id",$emp_info)
-            ->where("type", "LATE")
-            ->orwhere("emp_id", $emp_info)
-            ->where("type", "ABSENT")
-            ->whereIn("payroll_id", $payroll_ids)
-            ->sum("amount");
+
+            // GET LATE / UT / ABSENT
+            $tardi = DB::connection("intra_payroll")
+                ->table("tbl_payroll_deduction")
+                ->whereIn("payroll_id", $payroll_ids)
+                ->where("emp_id", $emp_info)
+                ->whereIn("type", ["LATE", "UT", "ABSENT"])
+                ->sum("amount");
+
+            // NET BASIC PAY
             $over_all_basic = $basic_pays - $tardi;
+
+            // 13TH MONTH
             $endpay = $over_all_basic / 12;
+
+             // LOG PER-EMPLOYEE COMPUTATION
+            Log::info("13TH MONTH EMPLOYEE COMPUTATION", [
+                "payroll_id" => $request->pay_id,
+                "emp_id" => $emp_info,
+                "employee_name" => trim(
+                    ($emp_check["first_name"] ?? "") . " " .
+                    ($emp_check["last_name"] ?? "")
+                ),
+                "cover_from" => $startDate,
+                "cover_to" => $endDate,
+                "regular_payroll_ids" => $payroll_ids,
+                "total_basic_pay" => round((float) $basic_pays, 2),
+                "total_tardi_deductions" => round((float) $tardi, 2),
+                "overall_basic_pay" => round((float) $over_all_basic, 2),
+                "thirteenth_month_computation" =>
+                    round((float) $over_all_basic, 2) . " / 12",
+                "thirteenth_month_pay" => round((float) $endpay, 2),
+            ]);
+
             array_push($payroll_income, array(
                 "payroll_id" => $request->pay_id,
                 "emp_id" => $emp_info,
@@ -2140,26 +2171,30 @@ class payrollController extends Controller
                 "date_created" => date("Y-m-d"),
                 "user_id" => Auth::user()->id
             ));
-         
         }
+
         DB::beginTransaction();
+
         try {
-            DB::connection("intra_payroll")->table("tbl_payroll")
-                ->where("id", $request->pay_id)
-                ->update([
-                    "payroll_status" => "COMPUTED"
-                ]);
-                DB::connection("intra_payroll")->table("tbl_payroll_income")
-                    ->orWhere("type", "LIKE","13TH")
-                    ->where("payroll_id", $request->pay_id)
-                    ->delete();
-                    DB::connection("intra_payroll")->table("tbl_payroll_income")
-                        ->insert($payroll_income);
-                        
+
+            DB::connection("intra_payroll")
+                ->table("tbl_payroll_income")
+                ->where("type", "13TH")
+                ->where("payroll_id", $request->pay_id)
+                ->delete();
+
+            DB::connection("intra_payroll")
+                ->table("tbl_payroll_income")
+                ->insert($payroll_income);
+
             DB::commit();
+
             return "Success";
+
         } catch (\Throwable $th) {
+
             DB::rollback();
+
             return $th->getMessage();
         }
     }
@@ -4168,9 +4203,14 @@ class payrollController extends Controller
                                                 //         > Add Manual Total Time </a>";
                                                     // $btn .= "<br><button onclick='process_payroll(".$row->id.")' class='btn btn-sm btn-success mb-1 w-100' 
                                                     //     > Process Payroll </button>";
-                                                $btn .= "<br><button onclick='process_timecard(".$row->id.")' class='btn btn-sm btn-success mb-1 w-100' 
+                                                if($row->process_type == "13"){ //13th month payroll ito rekta process payroll na
+                                                    $btn .= "<br><button onclick='process_payroll(".$row->id.")' class='btn btn-sm btn-success mb-1 w-100' 
+                                                    > Process Payroll </button>";
+                                                }else{
+                                                    $btn .= "<br><button onclick='process_timecard(".$row->id.")' class='btn btn-sm btn-success mb-1 w-100' 
+                                                    > Process Timecard </button>";
+                                                }
                                                 
-                                                // > Process Timecard </button>";
                                                 // UPDATE STATUS INTO PROCESS
                                             }
                                             
@@ -4182,12 +4222,15 @@ class payrollController extends Controller
                                                 //         data-pay_id='".$row->id."'
                                                 //         data-target='#manual_timekeeping'
                                                 //         > Add Manual Total Time </a>";
-                                                $btn .= "<br><button onclick='process_timecard(".$row->id.")' class='btn btn-sm btn-info mb-1 w-100' 
+                                                if($row->process_type != "13"){
+                                                    $btn .= "<br><button onclick='process_timecard(".$row->id.")' class='btn btn-sm btn-info mb-1 w-100' 
                                                 
-                                                > Process Timecard </button>";
-                                                $btn .= "<br><button onclick='download_timecard(".$row->id.")' class='btn btn-sm btn-info mb-1 w-100' 
+                                                    > Process Timecard </button>";
+                                                    $btn .= "<br><button onclick='download_timecard(".$row->id.")' class='btn btn-sm btn-info mb-1 w-100' 
+                                                    
+                                                    > Download Timecard </button>";
+                                                }
                                                 
-                                                > Download Timecard </button>";
                                                 $btn .= "<br><button onclick='process_payroll(".$row->id.")' class='btn btn-sm btn-success mb-1 w-100' 
                                                     > Process Payroll </button>";
                                                 
@@ -4205,18 +4248,20 @@ class payrollController extends Controller
 
                                                 $badge = $count > 0 ? "<span class='badge badge-danger ml-1'>".$count."</span>" : "";
 
-                                                $btn .= "<br>
-                                                <button 
-                                                    class='btn btn-warning btn-sm w-100 mb-1'
-                                                    onclick='open_credit_adj_modal(".$row->id.")'>
-                                                    Credit Adjustment $badge
-                                                </button>";
-                                                $btn .= "<br>
-                                                <button 
-                                                    onclick='salary_increase(".$row->id.")' 
-                                                    class='btn btn-sm btn-warning mb-1 w-100'>
-                                                    WO#27
-                                                </button>";
+                                                if($row->process_type != "13"){
+                                                    $btn .= "<br>
+                                                    <button 
+                                                        class='btn btn-warning btn-sm w-100 mb-1'
+                                                        onclick='open_credit_adj_modal(".$row->id.")'>
+                                                        Credit Adjustment $badge
+                                                    </button>";
+                                                    $btn .= "<br>
+                                                    <button 
+                                                        onclick='salary_increase(".$row->id.")' 
+                                                        class='btn btn-sm btn-warning mb-1 w-100'>
+                                                        WO#27
+                                                    </button>";
+                                                }
                                                 $btn .= "<br><button onclick='push_for_approval(".$row->id.")' class='btn btn-sm btn-info mb-1 w-100' 
                                                 > Post for Approval </button>";
                                                 $btn .= "<br><button  onclick='export_payroll($row->id)' class='export_payroll btn btn-success btn-sm w-100 mb-1'>Payroll Report</button>";
@@ -4374,9 +4419,13 @@ class payrollController extends Controller
                 ->where("id", $request->pay_id)
                 ->first();
             if($check_payroll != null){
+                $status = "PROCESS";
+                if($check_payroll->process_type == "13"){
+                    $status = "COMPUTED";
+                }
                 DB::connection("intra_payroll")->table("tbl_payroll")
                     ->where("id", $request->pay_id)
-                    ->update(["payroll_status" => "PROCESS"]);
+                    ->update(["payroll_status" => $status]);
             }else{
                 return json_encode("Payroll Info Unreachable");
             }
