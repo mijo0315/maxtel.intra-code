@@ -3428,16 +3428,24 @@ class payrollController extends Controller
                                 $regular_work = 0;
                                 $special_holiday = 0;
                                 if($emp_data["salary_type"] == "MONTHLY"){
-                                    if($timecard_data != null){
-                                        if($timecard_data->AM_IN != "" && $timecard_data->PM_OUT != ""){
-                                            $special_holiday = $daily_divisor;
-                                            $regular_work = $daily_divisor;
-                                            if($timekeeping_data["rd"] > 0){
-                                                // $timekeeping_data["rd_sh"] = $timekeeping_data["rd"];
-                                                $timekeeping_data["rd_sh"] = 0;
-                                                $timekeeping_data["rd"] = 0;
+                                    if($emp_data["hr_group"] == "group_c" || $emp_data["hr_group"] == "group_b"){
+                                        if($timecard_data != null){
+                                            if($timecard_data->AM_IN != "" && $timecard_data->PM_OUT != ""){
+                                                $special_holiday = $daily_divisor;
+                                                $regular_work = $daily_divisor;
+                                                if($timekeeping_data["rd"] > 0){
+                                                    $timekeeping_data["rd_sh"] = 0;
+                                                    $timekeeping_data["rd"] = 0;
+                                                }
                                             }
                                         }
+                                    }else{
+                                        $special_holiday = $daily_divisor;
+                                        $regular_work = $daily_divisor;
+                                        if($timekeeping_data["rd"] > 0){
+                                            $timekeeping_data["rd_sh"] = 0;
+                                            $timekeeping_data["rd"] = 0;
+                                        }  
                                     }
                                 }else{
                                     if($timecard_data != null){
@@ -3445,7 +3453,6 @@ class payrollController extends Controller
                                             $special_holiday = $daily_divisor;
                                             $regular_work = $daily_divisor;
                                             if($timekeeping_data["rd"] > 0){
-                                                // $timekeeping_data["rd_sh"] = $timekeeping_data["rd"];
                                                 $timekeeping_data["rd_sh"] = 0;
                                                 $timekeeping_data["rd"] = 0;
                                             }
@@ -3456,60 +3463,56 @@ class payrollController extends Controller
                                     $timekeeping_data['absent'] = 0;
                                 }
 
-                                $check_date = $cur_date;
+                                // $check_date = $cur_date;
 
-                                do {
-                                    $check_date = date('Y-m-d', strtotime($check_date . ' -1 day'));
+                                // do {
+                                //     $check_date = date('Y-m-d', strtotime($check_date . ' -1 day'));
 
-                                    $is_holiday = DB::connection("intra_payroll")->table("tbl_holiday")
-                                        ->where("holiday_date", $check_date)
-                                        ->exists();
+                                //     $is_holiday = DB::connection("intra_payroll")->table("tbl_holiday")
+                                //         ->where("holiday_date", $check_date)
+                                //         ->exists();
 
-                                    $is_rd = false;
+                                //     $is_rd = false;
 
-                                    $daily_check = DB::connection("intra_payroll")
-                                        ->table("tbl_daily_schedule")
-                                        ->where("emp_id", $emp_id)
-                                        ->where("schedule_date", $check_date)
-                                        ->first();
+                                //     $daily_check = DB::connection("intra_payroll")
+                                //         ->table("tbl_daily_schedule")
+                                //         ->where("emp_id", $emp_id)
+                                //         ->where("schedule_date", $check_date)
+                                //         ->first();
 
-                                    if ($daily_check) {
-                                        // Daily schedule takes priority
-                                        $is_rd = ($daily_check->schedule_id == 0);
-                                    } else {
-                                        // No daily schedule, use employee's weekly schedule
-                                        $day_name_check = strtolower(date('l', strtotime($check_date)));
+                                //     if ($daily_check) {
+                                //         // Daily schedule takes priority
+                                //         $is_rd = ($daily_check->schedule_id == 0);
+                                //     } else {
+                                //         // No daily schedule, use employee's weekly schedule
+                                //         $day_name_check = strtolower(date('l', strtotime($check_date)));
 
-                                        if ($emp_data["schedule_id"] != 0) {
-                                            $weekly_sched = $this->get_schedule_data(
-                                                $emp_data["schedule_id"],
-                                                $day_name_check
-                                            );
+                                //         if ($emp_data["schedule_id"] != 0) {
+                                //             $weekly_sched = $this->get_schedule_data(
+                                //                 $emp_data["schedule_id"],
+                                //                 $day_name_check
+                                //             );
 
-                                            $is_rd = ($weekly_sched === "RD");
-                                        }
-                                    }
+                                //             $is_rd = ($weekly_sched === "RD");
+                                //         }
+                                //     }
 
-                                } while ($is_holiday || $is_rd);
+                                // } while ($is_holiday || $is_rd);
 
 
-                                //Check if employee worked or was on approved leave on that date
+                                // //Check if employee worked or was on approved leave on that date
 
-                                $timecard_data = DB::connection("intra_payroll")->table("tbl_timecard")
-                                    ->where("emp_id", $emp_id)
-                                    ->where("target_date", $check_date)
-                                    ->first();
+                                // $timecard_data = DB::connection("intra_payroll")->table("tbl_timecard")
+                                //     ->where("emp_id", $emp_id)
+                                //     ->where("target_date", $check_date)
+                                //     ->first();
 
-                                //Final condition
-                                if (!empty($timecard_data)) {
-                                    if($timecard_data->AM_IN != "" && $timecard_data->PM_OUT != "" && ($emp_data["hr_group"] != "group_c" || $emp_data["hr_group"] != "group_b")){
-                                        $regular_work = $daily_divisor;
-                                    }
-                                }
-
-                                if($emp_data["hr_group"] == "group_c"){
-                                    $regular_holiday = 0;
-                                }
+                                // //Final condition
+                                // if (!empty($timecard_data)) {
+                                //     if($timecard_data->AM_IN != "" && $timecard_data->PM_OUT != "" && ($emp_data["hr_group"] != "group_c" || $emp_data["hr_group"] != "group_b")){
+                                //         $regular_work = $daily_divisor;
+                                //     }
+                                // }
 
                                 if($worked_other_branch) {
                                     $regular_work = 0;
